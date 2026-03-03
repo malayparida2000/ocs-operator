@@ -3650,6 +3650,32 @@ spec:
                     description: DisableBlackboxExporter disables deployment of Blackbox
                       Exporter for network health checks
                     type: boolean
+                  excludedAlerts:
+                    description: |-
+                      ExcludedAlerts lists alerts to exclude from ODF health score calculation.
+                      Alerts still fire in Prometheus but are excluded from health score.
+                    items:
+                      description: ExcludedAlert represents an alert that has been
+                        excluded
+                      properties:
+                        alertName:
+                          description: AlertName is the name of the alert to exclude
+                          type: string
+                        excludedAt:
+                          description: ExcludedAt is the timestamp when the alert
+                            was excluded
+                          format: date-time
+                          type: string
+                        severity:
+                          description: |-
+                            Severity is the severity of the alert to exclude. Valid
+                            values are "critical", "warning", and "info".
+                          type: string
+                      required:
+                      - alertName
+                      - excludedAt
+                      type: object
+                    type: array
                   labels:
                     additionalProperties:
                       type: string

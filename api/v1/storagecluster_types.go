@@ -506,6 +506,21 @@ type MonitoringSpec struct {
 	// DisableBlackboxExporter disables deployment of Blackbox Exporter for network health checks
 	// +optional
 	DisableBlackboxExporter bool `json:"disableBlackboxExporter,omitempty"`
+	// ExcludedAlerts lists alerts to exclude from ODF health score calculation.
+	// Alerts still fire in Prometheus but are excluded from health score.
+	// +optional
+	ExcludedAlerts []ExcludedAlert `json:"excludedAlerts,omitempty"`
+}
+
+// ExcludedAlert represents an alert that has been excluded
+type ExcludedAlert struct {
+	// AlertName is the name of the alert to exclude
+	AlertName string `json:"alertName"`
+	// ExcludedAt is the timestamp when the alert was excluded
+	ExcludedAt metav1.Time `json:"excludedAt"`
+	// Severity is the severity of the alert to exclude. Valid
+	// values are "critical", "warning", and "info".
+	Severity string `json:"severity,omitempty"`
 }
 
 // EncryptionSpec defines if encryption should be enabled for the Storage Cluster
