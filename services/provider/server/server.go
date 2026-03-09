@@ -27,6 +27,7 @@ import (
 	ocsv1alpha1 "github.com/red-hat-storage/ocs-operator/api/v4/v1alpha1"
 	pb "github.com/red-hat-storage/ocs-operator/services/provider/api/v4"
 	"github.com/red-hat-storage/ocs-operator/v4/pkg/defaults"
+	"github.com/red-hat-storage/ocs-operator/v4/pkg/platform"
 	"github.com/red-hat-storage/ocs-operator/v4/pkg/util"
 	"github.com/red-hat-storage/ocs-operator/v4/services"
 	ocsVersion "github.com/red-hat-storage/ocs-operator/v4/version"
@@ -112,6 +113,7 @@ type OCSProviderServer struct {
 	consumerManager           *ocsConsumerManager
 	storageClusterPeerManager *storageClusterPeerManager
 	namespace                 string
+	alertStore                *alertStore
 }
 
 type stringPair [2]string
@@ -177,12 +179,29 @@ func NewOCSProviderServer(ctx context.Context, namespace string) (*OCSProviderSe
 		panic("cache did not sync")
 	}
 
+	prometheusURL := "https://prometheus-k8s.openshift-monitoring.svc.cluster.local:9091"
+	if isROSAHCP, err := platform.IsPlatformROSAHCP(); err != nil {
+		// If platform detection hasn't run (e.g. in the provider-api binary),
+		// fall through to the default OpenShift Prometheus URL.
+		klog.V(1).InfoS("platform not detected, using default Prometheus URL", "error", err)
+	} else if isROSAHCP {
+		prometheusURL = fmt.Sprintf("https://prometheus.%s.svc.cluster.local:9339", namespace)
+	}
+
+	prometheusHTTPClient, err := newPrometheusHTTPClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create Prometheus HTTP client: %w", err)
+	}
+	ac := newAlertStore(prometheusURL, 1*time.Minute, prometheusHTTPClient)
+	go ac.startPolling(ctx)
+
 	return &OCSProviderServer{
 		client:                    client,
 		scheme:                    scheme,
 		consumerManager:           consumerManager,
 		storageClusterPeerManager: newStorageClusterPeerManager(client, namespace),
 		namespace:                 namespace,
+		alertStore:                ac,
 	}, nil
 }
 
@@ -2684,4 +2703,31 @@ func getObcHashedName(
 	md5Sum := md5.Sum(obcHash)
 	hashString := hex.EncodeToString(md5Sum[:16])
 	return fmt.Sprintf("%s-%s", prefixOfHashedName, hashString)
+}
+
+// GetClientAlerts returns cached alerts for a specific storage consumer.
+// Alerts are updated in the background every minute, so this RPC returns immediately.
+func (s *OCSProviderServer) GetClientAlerts(ctx context.Context, req *pb.GetClientAlertsRequest) (*pb.GetClientAlertsResponse, error) {
+	logger := klog.FromContext(ctx).WithName("GetClientAlerts").WithValues("StorageConsumerUUID", req.StorageConsumerUUID)
+	logger.Info("Starting GetClientAlerts RPC")
+
+	if req.StorageConsumerUUID == "" {
+		logger.Error(fmt.Errorf("missing required field"), "StorageConsumerUUID is empty")
+		return nil, status.Errorf(codes.InvalidArgument, "StorageConsumerUUID is required")
+	}
+
+	storageConsumer, err := s.consumerManager.Get(ctx, req.StorageConsumerUUID)
+	if err != nil {
+		logger.Error(err, "Failed to get StorageConsumer")
+		return nil, status.Errorf(codes.Internal, "failed to get StorageConsumer: storageConsumerUUID=%s", req.StorageConsumerUUID)
+	}
+
+	alerts, err := s.alertStore.getAlertsForConsumer(storageConsumer.Name)
+	if err != nil {
+		logger.Error(err, "Alert cache unavailable")
+		return nil, status.Errorf(codes.Internal, "failed to get alerts: %v", err)
+	}
+
+	logger.Info("Successfully completed GetClientAlerts RPC", "alertCount", len(alerts))
+	return &pb.GetClientAlertsResponse{Alerts: alerts}, nil
 }
