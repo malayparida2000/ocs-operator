@@ -33,7 +33,7 @@ func (r *StorageClusterReconciler) createGroupSnapshotClasses(vsccs []GroupSnaps
 		desired := vscc.groupSnapshotClass
 		existing := &groupsnapapi.VolumeGroupSnapshotClass{}
 		existing.Name = desired.Name
-		_, err := controllerutil.CreateOrUpdate(r.ctx, r.Client, existing, func() error {
+		_, err := controllerutil.CreateOrUpdate(r.ctx, r, existing, func() error {
 			// If found and reconcileStrategy is init we skip
 			if existing.UID != "" && vscc.reconcileStrategy == ReconcileStrategyInit {
 				return nil
@@ -56,18 +56,17 @@ func (r *StorageClusterReconciler) createGroupSnapshotClasses(vsccs []GroupSnaps
 			return nil
 		})
 		if util.IsForbiddenError(err) {
-			if err := r.Client.Delete(r.ctx, existing); client.IgnoreNotFound(err) != nil {
+			if err := r.Delete(r.ctx, existing); client.IgnoreNotFound(err) != nil {
 				return fmt.Errorf("failed to replace GroupSnapshotClass %v: %v", existing.GetName(), err)
 			}
 
 			// k8s doesn't allow us to create objects when resourceVersion is set, as we are DeepCopying the
 			// object, the resource version also gets copied, hence we need to set it to empty before creating it
 			existing.SetResourceVersion("")
-			if err := r.Client.Create(r.ctx, existing); err != nil {
+			if err := r.Create(r.ctx, existing); err != nil {
 				return fmt.Errorf("failed to replace GroupSnapshotClass %v: %v", existing.GetName(), err)
 			}
-		}
-		if err != nil {
+		} else if err != nil {
 			r.Log.Error(err, "Failed to create or update GroupSnapshotClass.", "GroupSnapshotClass", existing.GetName())
 			return err
 		}
@@ -145,7 +144,7 @@ func (obj *ocsGroupSnapshotClass) ensureDeleted(r *StorageClusterReconciler, ins
 		vgsc := &groupsnapapi.VolumeGroupSnapshotClass{}
 		vgsc.Name = name
 		vgsc.Namespace = instance.Namespace
-		err := r.Client.Delete(r.ctx, vgsc)
+		err := r.Delete(r.ctx, vgsc)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				r.Log.Info("Uninstall: GroupSnapshotClass not found, nothing to do.", "GroupSnapshotClass", klog.KRef("", vgsc.Name))

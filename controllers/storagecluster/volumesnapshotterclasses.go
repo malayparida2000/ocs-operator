@@ -43,7 +43,7 @@ func (r *StorageClusterReconciler) createSnapshotClasses(vsccs []SnapshotClassCo
 		desired := vscc.snapshotClass
 		existing := &snapapi.VolumeSnapshotClass{}
 		existing.Name = desired.Name
-		_, err := controllerutil.CreateOrUpdate(r.ctx, r.Client, existing, func() error {
+		_, err := controllerutil.CreateOrUpdate(r.ctx, r, existing, func() error {
 			// If found and reconcileStrategy is init we skip
 			if existing.UID != "" && vscc.reconcileStrategy == ReconcileStrategyInit {
 				return nil
@@ -65,14 +65,14 @@ func (r *StorageClusterReconciler) createSnapshotClasses(vsccs []SnapshotClassCo
 			return nil
 		})
 		if util.IsForbiddenError(err) {
-			if err := r.Client.Delete(r.ctx, existing); client.IgnoreNotFound(err) != nil {
+			if err := r.Delete(r.ctx, existing); client.IgnoreNotFound(err) != nil {
 				return fmt.Errorf("failed to replace SnapshotClass %v: %v", existing.GetName(), err)
 			}
 
 			// k8s doesn't allow us to create objects when resourceVersion is set, as we are DeepCopying the
 			// object, the resource version also gets copied, hence we need to set it to empty before creating it
 			existing.SetResourceVersion("")
-			if err := r.Client.Create(r.ctx, existing); err != nil {
+			if err := r.Create(r.ctx, existing); err != nil {
 				return fmt.Errorf("failed to replace SnapshotClass %v: %v", existing.GetName(), err)
 			}
 		}
@@ -111,7 +111,7 @@ func (r *StorageClusterReconciler) getClusterIDAndSecretName(instance *ocsv1.Sto
 			radosNamespaceName = d.Data["radosNamespaceName"]
 			// get the clusterID from the radosNamespace status
 			radosNamespace := &cephv1.CephBlockPoolRadosNamespace{}
-			err := r.Client.Get(context.TODO(), types.NamespacedName{Name: radosNamespaceName, Namespace: instance.Namespace}, radosNamespace)
+			err := r.Get(context.TODO(), types.NamespacedName{Name: radosNamespaceName, Namespace: instance.Namespace}, radosNamespace)
 			if err != nil {
 				log.Error(err, "CephBlockPoolRadosNamespace not found", "CephBlockPoolRadosNamespace", klog.KRef(instance.Namespace, radosNamespaceName))
 				return "", "", err
@@ -184,7 +184,7 @@ func (obj *ocsSnapshotClass) ensureDeleted(r *StorageClusterReconciler, instance
 		vsc := &snapapi.VolumeSnapshotClass{}
 		vsc.Name = name
 		vsc.Namespace = instance.Namespace
-		err := r.Client.Delete(r.ctx, vsc)
+		err := r.Delete(r.ctx, vsc)
 		if err != nil {
 			if errors.IsNotFound(err) {
 				r.Log.Info("Uninstall: SnapshotClass not found, nothing to do.", "SnapshotClass", klog.KRef("", vsc.Name))

@@ -52,7 +52,7 @@ func assertCephRGWRoutes(t *testing.T, reconciler *StorageClusterReconciler, cr 
 	assert.NoError(t, err)
 	actualCos := &routev1.Route{}
 	request.Name = "ocsinit-cephobjectstore"
-	err = reconciler.Client.Get(context.TODO(), request.NamespacedName, actualCos)
+	err = reconciler.Get(context.TODO(), request.NamespacedName, actualCos)
 	// for any cloud platform, 'route' should not be created
 	// 'Get' should have thrown an error
 	platformType, detectErr := platform.GetPlatformType()
@@ -106,13 +106,13 @@ func assertCephRGWRoutes(t *testing.T, reconciler *StorageClusterReconciler, cr 
 		}
 		if cr.Spec.ManagedResources.CephObjectStores.DisableHttp {
 			assert.Equal(t, 1, len(expectedCos))
-			assert.Equal(t, expectedCos[0].ObjectMeta.Name, actualCosSecure.ObjectMeta.Name)
+			assert.Equal(t, expectedCos[0].Name, actualCosSecure.Name)
 			assert.Equal(t, expectedCos[0].Spec, actualCosSecure.Spec)
 		} else {
 			assert.Equal(t, 2, len(expectedCos))
-			assert.Equal(t, expectedCos[0].ObjectMeta.Name, actualCosSecure.ObjectMeta.Name)
+			assert.Equal(t, expectedCos[0].Name, actualCosSecure.Name)
 			assert.Equal(t, expectedCos[0].Spec, actualCosSecure.Spec)
-			assert.Equal(t, expectedCos[1].ObjectMeta.Name, actualCos.ObjectMeta.Name)
+			assert.Equal(t, expectedCos[1].Name, actualCos.Name)
 			assert.Equal(t, expectedCos[1].Spec, actualCos.Spec)
 		}
 	}
