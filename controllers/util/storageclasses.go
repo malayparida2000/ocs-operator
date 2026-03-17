@@ -442,7 +442,7 @@ func StorageClassFromExisting(
 	replicationID := ""
 	groupReplicationID := ""
 	operatorNamespace := consumer.Status.Client.OperatorNamespace
-	// assumption that noobaa is deployed on the same namespace as ocs operator
+	// assumption that noobaa is deployed on the same namespace as ocs operator.
 	ocsOperatorNamespace, err := GetOperatorNamespace()
 	if err != nil {
 		return nil, err
