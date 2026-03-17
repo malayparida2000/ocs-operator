@@ -80,7 +80,7 @@ func checkEndpointReachable(endpoint string, timeout time.Duration) error {
 	if err != nil {
 		return err
 	}
-	defer con.Close()
+	defer func() { _ = con.Close() }()
 	return nil
 }
 
