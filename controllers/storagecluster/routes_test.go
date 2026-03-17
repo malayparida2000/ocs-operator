@@ -41,7 +41,7 @@ func TestCephRGWRoutes(t *testing.T) {
 		t, reconciler, cr, request := initStorageClusterResourceCreateUpdateTest(t, objects, nil)
 		cr.Spec.ManagedResources.CephObjectStores.DisableHttp = c.disableHttp
 		if c.createRuntimeObjects {
-			objects = createUpdateRuntimeObjects(t) //nolint:staticcheck //no need to use objects as they update in runtime
+			_ = createUpdateRuntimeObjects(t)
 		}
 		assertCephRGWRoutes(t, reconciler, cr, request)
 		platform.UnsetFakePlatformInstanceForTesting()
