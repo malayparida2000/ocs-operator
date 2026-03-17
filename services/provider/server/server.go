@@ -116,6 +116,11 @@ type OCSProviderServer struct {
 
 type stringPair [2]string
 
+type sanitizeFlags struct {
+	skipMetaData bool
+	skipStatus   bool
+}
+
 func NewOCSProviderServer(ctx context.Context, namespace string) (*OCSProviderServer, error) {
 	scheme, err := newScheme()
 	if err != nil {
@@ -319,7 +324,20 @@ func (s *OCSProviderServer) GetDesiredClientState(ctx context.Context, req *pb.G
 			}
 
 			kubeResource.GetObjectKind().SetGroupVersionKind(gvk)
-			sanitizeKubeResource(kubeResource)
+			switch gvk.Kind {
+			case "ObjectBucketClaim", "ObjectBucket":
+				sanitizeKubeResource(
+					kubeResource,
+					sanitizeFlags{
+						skipStatus: true,
+					},
+				)
+			default:
+				sanitizeKubeResource(
+					kubeResource,
+					sanitizeFlags{},
+				)
+			}
 			kubeResourceBytes := util.JsonMustMarshal(kubeResource)
 			response.KubeObjects = append(response.KubeObjects, &pb.KubeObject{Bytes: kubeResourceBytes})
 		}
@@ -2351,14 +2369,19 @@ func (s *OCSProviderServer) getOdfVolumeGroupSnapshotClassesResourceVersion(ctx 
 	})
 }
 
-func sanitizeKubeResource(obj client.Object) {
+func sanitizeKubeResource(obj client.Object, sanitizeFlags sanitizeFlags) {
 	name := obj.GetName()
 	namespace := obj.GetNamespace()
 	labels := obj.GetLabels()
 	annotations := obj.GetAnnotations()
 
-	zeroFieldByName(obj, "Status")
-	zeroFieldByName(obj, "ObjectMeta")
+	if !sanitizeFlags.skipMetaData {
+		zeroFieldByName(obj, "ObjectMeta")
+	}
+
+	if !sanitizeFlags.skipStatus {
+		zeroFieldByName(obj, "Status")
+	}
 
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
