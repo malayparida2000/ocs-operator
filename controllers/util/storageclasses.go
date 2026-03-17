@@ -442,6 +442,12 @@ func StorageClassFromExisting(
 	replicationID := ""
 	groupReplicationID := ""
 	operatorNamespace := consumer.Status.Client.OperatorNamespace
+	// assumption that noobaa is deployed on the same namespace as ocs operator.
+	ocsOperatorNamespace, err := GetOperatorNamespace()
+	if err != nil {
+		return nil, err
+	}
+	NoobaaProvisionerName := ocsOperatorNamespace + NoobaaProvisionerNameSuffix
 	switch storageClass.Provisioner {
 	case RbdDriverName:
 		clientProfileName = consumerConfig.GetRbdClientProfileName()
@@ -470,6 +476,8 @@ func StorageClassFromExisting(
 		provisionerSecretName = consumerConfig.GetCsiNfsProvisionerCephUserName()
 		nodeSecretName = consumerConfig.GetCsiNfsNodeCephUserName()
 		storageId = nfsStorageId
+	case NoobaaProvisionerName:
+		return storageClass, nil
 	default:
 		return nil, ErrUnsupportedProvisioner
 	}
