@@ -55,14 +55,14 @@ func (r *StorageClusterReconciler) createOdfGroupSnapshotClasses(vgsc OdfGroupSn
 		return nil
 	})
 	if util.IsForbiddenError(err) {
-		if err := r.Client.Delete(r.ctx, existing); client.IgnoreNotFound(err) != nil {
+		if err := r.Delete(r.ctx, existing); client.IgnoreNotFound(err) != nil {
 			return fmt.Errorf("failed to replace GroupSnapshotClass %v: %v", existing.GetName(), err)
 		}
 
 		// k8s doesn't allow us to create objects when resourceVersion is set, as we are DeepCopying the
 		// object, the resource version also gets copied, hence we need to set it to empty before creating it
 		existing.SetResourceVersion("")
-		if err := r.Client.Create(r.ctx, existing); err != nil {
+		if err := r.Create(r.ctx, existing); err != nil {
 			return fmt.Errorf("failed to replace GroupSnapshotClass %v: %v", existing.GetName(), err)
 		}
 	} else if err != nil {
@@ -121,7 +121,7 @@ func (obj *ocsOdfGroupSnapshotClass) ensureDeleted(r *StorageClusterReconciler, 
 	vgsc := &odfgsapiv1b1.VolumeGroupSnapshotClass{}
 	vgsc.Name = util.GenerateNameForGroupSnapshotClass(instance, util.CephfsGroupSnapshotter)
 	vgsc.Namespace = instance.Namespace
-	err := r.Client.Delete(r.ctx, vgsc)
+	err := r.Delete(r.ctx, vgsc)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info("Uninstall: OdfGroupSnapshotClass not found, nothing to do.", "OdfGroupSnapshotClass", klog.KRef("", vgsc.Name))

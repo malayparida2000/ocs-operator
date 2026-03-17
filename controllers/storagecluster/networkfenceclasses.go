@@ -23,7 +23,7 @@ func (o *ocsNetworkFenceClass) deleteNetworkFenceClass(r *StorageClusterReconcil
 	}
 
 	r.Log.Info("Uninstall: Deleting NetworkFenceClass.", "NetworkFenceClass", client.ObjectKeyFromObject(networkFenceClass))
-	if err := r.Client.Delete(r.ctx, networkFenceClass); err != nil {
+	if err := r.Delete(r.ctx, networkFenceClass); err != nil {
 		return reconcile.Result{}, fmt.Errorf("uninstall: Failed to delete NetworkFenceClass %v: %v", client.ObjectKeyFromObject(networkFenceClass), err)
 	}
 	return reconcile.Result{}, nil
@@ -42,7 +42,7 @@ func (o *ocsNetworkFenceClass) reconcileNetworkFenceClass(
 	existing := &csiaddonsv1alpha1.NetworkFenceClass{}
 	existing.Name = networkFenceClass.Name
 
-	if err := r.Client.Get(r.ctx, client.ObjectKeyFromObject(existing), existing); client.IgnoreNotFound(err) != nil {
+	if err := r.Get(r.ctx, client.ObjectKeyFromObject(existing), existing); client.IgnoreNotFound(err) != nil {
 		return reconcile.Result{}, err
 	}
 

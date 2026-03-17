@@ -80,7 +80,7 @@ func checkEndpointReachable(endpoint string, timeout time.Duration) error {
 	if err != nil {
 		return err
 	}
-	defer con.Close()
+	defer func() { _ = con.Close() }()
 	return nil
 }
 
@@ -95,7 +95,7 @@ func findNamedResourceFromArray(extArr []ExternalResource, name string) (Externa
 			return extR, nil
 		}
 	}
-	return ExternalResource{}, fmt.Errorf("Unable to retrieve %q external resource", name)
+	return ExternalResource{}, fmt.Errorf("unable to retrieve %q external resource", name)
 }
 
 // retrieveSecret function retrieves the secret object with the specified name
@@ -106,7 +106,7 @@ func (r *StorageClusterReconciler) retrieveSecret(secretName string, instance *o
 			Namespace: instance.Namespace,
 		},
 	}
-	err := r.Client.Get(context.TODO(), types.NamespacedName{Name: found.Name, Namespace: found.Namespace}, found)
+	err := r.Get(context.TODO(), types.NamespacedName{Name: found.Name, Namespace: found.Namespace}, found)
 	return found, err
 }
 
@@ -121,7 +121,7 @@ func (r *StorageClusterReconciler) deleteSecret(instance *ocsv1.StorageCluster) 
 		r.Log.Error(err, "Error while retrieving external rhcs mode secret.")
 		return err
 	}
-	return r.Client.Delete(context.TODO(), found)
+	return r.Delete(context.TODO(), found)
 }
 
 // retrieveExternalSecretData function retrieves the external secret and returns the data it contains
@@ -150,7 +150,7 @@ func newExternalGatewaySpec(rgwEndpoint string, reqLogger logr.Logger, tlsEnable
 		return nil, err
 	}
 	if hostIP == "" {
-		err := fmt.Errorf("An empty rgw host 'IP' address found")
+		err := fmt.Errorf("an empty rgw host 'IP' address found")
 		reqLogger.Error(err, "Host IP should not be empty in rgw endpoint")
 		return nil, err
 	}
@@ -272,7 +272,7 @@ func (r *StorageClusterReconciler) createExternalStorageClusterResources(instanc
 
 	data, ok := externalOCSResources[instance.UID]
 	if !ok {
-		return fmt.Errorf("Unable to retrieve external resource from externalOCSResources")
+		return fmt.Errorf("unable to retrieve external resource from externalOCSResources")
 	}
 
 	var extCephObjectStores []*cephv1.CephObjectStore
@@ -518,7 +518,7 @@ func (r *StorageClusterReconciler) createExternalModeStorageClasses(sccs []Stora
 			}
 			radosNamespace := cephv1.CephBlockPoolRadosNamespace{}
 			key := types.NamespacedName{Name: radosNamespaceName, Namespace: namespace}
-			err := r.Client.Get(context.TODO(), key, &radosNamespace)
+			err := r.Get(context.TODO(), key, &radosNamespace)
 			if err != nil || radosNamespace.Status == nil || radosNamespace.Status.Phase != cephv1.ConditionType(util.PhaseReady) || radosNamespace.Status.Info["clusterID"] == "" {
 				r.Log.Info("Waiting for radosNamespace to be Ready. Skip reconciling StorageClass",
 					"radosNamespace", klog.KRef(key.Namespace, key.Name),
@@ -532,7 +532,7 @@ func (r *StorageClusterReconciler) createExternalModeStorageClasses(sccs []Stora
 			// wait for CephNFS to be ready
 			cephNFS := cephv1.CephNFS{}
 			key := types.NamespacedName{Name: sc.Parameters["nfsCluster"], Namespace: namespace}
-			err := r.Client.Get(context.TODO(), key, &cephNFS)
+			err := r.Get(context.TODO(), key, &cephNFS)
 			if err != nil || cephNFS.Status == nil || cephNFS.Status.Phase != util.PhaseReady {
 				r.Log.Info("Waiting for CephNFS to be Ready. Skip reconciling StorageClass",
 					"CephNFS", klog.KRef(key.Namespace, key.Name),
@@ -567,14 +567,14 @@ func (r *StorageClusterReconciler) createExternalModeStorageClasses(sccs []Stora
 			return nil
 		})
 		if util.IsForbiddenError(err) {
-			if err := r.Client.Delete(r.ctx, existing); client.IgnoreNotFound(err) != nil {
+			if err := r.Delete(r.ctx, existing); client.IgnoreNotFound(err) != nil {
 				return fmt.Errorf("failed to replace StorageClass %v: %v", existing.GetName(), err)
 			}
 
 			// k8s doesn't allow us to create objects when resourceVersion is set, as we are DeepCopying the
 			// object, the resource version also gets copied, hence we need to set it to empty before creating it
 			existing.SetResourceVersion("")
-			if err := r.Client.Create(r.ctx, existing); err != nil {
+			if err := r.Create(r.ctx, existing); err != nil {
 				return fmt.Errorf("failed to replace StorageClass %v: %v", existing.GetName(), err)
 			}
 		} else if err != nil {
@@ -592,7 +592,7 @@ func verifyMonitoringEndpoints(monitoringIP, monitoringPort string,
 	log logr.Logger) (err error) {
 	if monitoringIP == "" {
 		err = fmt.Errorf(
-			"Monitoring Endpoint not present in the external cluster secret %s",
+			"monitoring endpoint not present in the external cluster secret %s",
 			externalClusterDetailsSecret)
 		log.Error(err, "Failed to get Monitoring IP.")
 		return
@@ -619,11 +619,11 @@ func verifyMonitoringEndpoints(monitoringIP, monitoringPort string,
 
 // createExternalStorageClusterConfigMap creates configmap for external cluster
 func (r *StorageClusterReconciler) createExternalStorageClusterConfigMap(cm *corev1.ConfigMap, found *corev1.ConfigMap, objectKey types.NamespacedName) error {
-	err := r.Client.Get(context.TODO(), objectKey, found)
+	err := r.Get(context.TODO(), objectKey, found)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info("Creating External StorageCluster ConfigMap.", "ConfigMap", klog.KRef(objectKey.Namespace, cm.Name))
-			err = r.Client.Create(context.TODO(), cm)
+			err = r.Create(context.TODO(), cm)
 			if err != nil {
 				r.Log.Error(err, "Creation of External StorageCluster ConfigMap failed.", "ConfigMap", klog.KRef(objectKey.Namespace, cm.Name))
 			}
@@ -634,9 +634,9 @@ func (r *StorageClusterReconciler) createExternalStorageClusterConfigMap(cm *cor
 	}
 	// update the found ConfigMap's Data with the latest changes,
 	// if they don't match
-	if cm.ObjectMeta.Name != monEndpointConfigMapName && !reflect.DeepEqual(found.Data, cm.Data) {
+	if cm.Name != monEndpointConfigMapName && !reflect.DeepEqual(found.Data, cm.Data) {
 		found.Data = cm.DeepCopy().Data
-		if err = r.Client.Update(context.TODO(), found); err != nil {
+		if err = r.Update(context.TODO(), found); err != nil {
 			return err
 		}
 	}
@@ -645,11 +645,11 @@ func (r *StorageClusterReconciler) createExternalStorageClusterConfigMap(cm *cor
 
 // createExternalStorageClusterSecret creates secret for external cluster
 func (r *StorageClusterReconciler) createExternalStorageClusterSecret(sec *corev1.Secret, found *corev1.Secret, objectKey types.NamespacedName) error {
-	err := r.Client.Get(context.TODO(), objectKey, found)
+	err := r.Get(context.TODO(), objectKey, found)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			r.Log.Info("Creating External StorageCluster Secret.", "Secret", klog.KRef(objectKey.Namespace, sec.Name))
-			err = r.Client.Create(context.TODO(), sec)
+			err = r.Create(context.TODO(), sec)
 			if err != nil {
 				r.Log.Error(err, "Creation of External StorageCluster Secret failed.", "Secret", klog.KRef(objectKey.Namespace, sec.Name))
 			}
@@ -662,7 +662,7 @@ func (r *StorageClusterReconciler) createExternalStorageClusterSecret(sec *corev
 	// if they don't match
 	if !reflect.DeepEqual(found.Data, sec.Data) {
 		found.Data = sec.DeepCopy().Data
-		if err = r.Client.Update(context.TODO(), found); err != nil {
+		if err = r.Update(context.TODO(), found); err != nil {
 			return err
 		}
 	}
@@ -759,7 +759,7 @@ func (r *StorageClusterReconciler) configureCsiDrivers(availableSCCs []StorageCl
 	clientConfig.Name = ocsClientConfigMapName
 	clientConfig.Namespace = r.OperatorNamespace
 
-	if err := r.Client.Get(r.ctx, client.ObjectKeyFromObject(clientConfig), clientConfig); err != nil {
+	if err := r.Get(r.ctx, client.ObjectKeyFromObject(clientConfig), clientConfig); err != nil {
 		r.Log.Error(err, "failed to get ocs client operator configmap", "configmap", klog.KRef(clientConfig.Namespace, clientConfig.Name))
 		return err
 	}
@@ -794,7 +794,7 @@ func (r *StorageClusterReconciler) configureCsiDrivers(availableSCCs []StorageCl
 	}
 
 	if !maps.Equal(clientConfig.Data, existingData) {
-		if err := r.Client.Update(r.ctx, clientConfig); err != nil {
+		if err := r.Update(r.ctx, clientConfig); err != nil {
 			r.Log.Error(err, "failed to update client operator's configmap data", "configmap", klog.KRef(clientConfig.Namespace, clientConfig.Name))
 			return err
 		}
