@@ -33,7 +33,7 @@ func (r *StorageClusterReconciler) createOdfGroupSnapshotClasses(vgsc OdfGroupSn
 	desired := vgsc.groupSnapshotClass
 	existing := &odfgsapiv1b1.VolumeGroupSnapshotClass{}
 	existing.Name = desired.Name
-	_, err := controllerutil.CreateOrUpdate(r.ctx, r, existing, func() error {
+	_, err := controllerutil.CreateOrUpdate(r.ctx, r.Client, existing, func() error {
 		// If found and reconcileStrategy is init we skip
 		if existing.UID != "" && vgsc.reconcileStrategy == ReconcileStrategyInit {
 			return nil

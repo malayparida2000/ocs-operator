@@ -33,7 +33,7 @@ func (r *StorageClusterReconciler) createGroupSnapshotClasses(vsccs []GroupSnaps
 		desired := vscc.groupSnapshotClass
 		existing := &groupsnapapi.VolumeGroupSnapshotClass{}
 		existing.Name = desired.Name
-		_, err := controllerutil.CreateOrUpdate(r.ctx, r, existing, func() error {
+		_, err := controllerutil.CreateOrUpdate(r.ctx, r.Client, existing, func() error {
 			// If found and reconcileStrategy is init we skip
 			if existing.UID != "" && vscc.reconcileStrategy == ReconcileStrategyInit {
 				return nil

@@ -545,7 +545,7 @@ func (r *StorageClusterReconciler) createExternalModeStorageClasses(sccs []Stora
 
 		existing := &storagev1.StorageClass{}
 		existing.Name = sc.Name
-		_, err := controllerutil.CreateOrUpdate(r.ctx, r, existing, func() error {
+		_, err := controllerutil.CreateOrUpdate(r.ctx, r.Client, existing, func() error {
 			// If found and reconcileStrategy is init we skip
 			if existing.UID != "" && scc.reconcileStrategy == ReconcileStrategyInit {
 				return nil
