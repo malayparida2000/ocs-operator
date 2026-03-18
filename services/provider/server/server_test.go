@@ -108,7 +108,7 @@ func TestGetKubeResourcesForClass(t *testing.T) {
 
 	objIdxByName := make(map[string]int, len(objs))
 	for idx, obj := range objs {
-		objIdxByName[obj.GetName()] = idx
+		objIdxByName[obj.kubeObject.GetName()] = idx
 	}
 
 	for _, expName := range []string{"class-1", "class-2"} {
@@ -122,8 +122,8 @@ func TestGetKubeResourcesForClass(t *testing.T) {
 			gotObj := objs[idx]
 			// except the name the whole object should be deep equal
 			wantObj.Name = expName
-			if !equality.Semantic.DeepEqual(gotObj, wantObj) {
-				t.Fatalf("expected %v to be deep equal to %v", gotObj, wantObj)
+			if !equality.Semantic.DeepEqual(gotObj.kubeObject, wantObj) {
+				t.Fatalf("expected %v to be deep equal to %v", gotObj.kubeObject, wantObj)
 			}
 		})
 	}
