@@ -784,7 +784,7 @@ func (s *OCSProviderServer) getOBCResourceVersions(ctx context.Context, logger l
 		obcList,
 		client.InNamespace(consumer.Namespace),
 		client.MatchingLabels{
-			storageConsumerUUIDLabelKey: string(consumer.GetUID()),
+			storageConsumerUUIDLabelKey: string(consumer.UID),
 		},
 	); err != nil {
 		logger.Error(err, "failed to list OBC's for consumer")
@@ -793,50 +793,17 @@ func (s *OCSProviderServer) getOBCResourceVersions(ctx context.Context, logger l
 
 	for i := range obcList.Items {
 		obc := &obcList.Items[i]
-		resourceVersions = append(
-			resourceVersions,
-			stringPair{"obc", obc.GetResourceVersion()},
-		)
 
-		ob := &nbv1.ObjectBucket{}
-		ob.Name = fmt.Sprintf("obc-%s-%s", consumer.Namespace, obc.GetName())
-		if err := s.client.Get(
-			ctx,
-			client.ObjectKeyFromObject(ob),
-			ob,
-		); err != nil {
-			return nil, fmt.Errorf("failed to get OB for consumer. error is %v", err)
+		ob, configMap, secret, err := s.getOBCRelatedResources(ctx, obc.Name, consumer)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get OBC related resources for consumer %v. %v", consumer.UID, err)
 		}
 
-		resourceVersions = append(resourceVersions, stringPair{"ob", ob.ResourceVersion})
-
-		configMap := &corev1.ConfigMap{}
-		configMap.Namespace = consumer.Namespace
-		configMap.Name = obc.GetName()
-		if err := s.client.Get(
-			ctx,
-			client.ObjectKeyFromObject(configMap),
-			configMap,
-		); err != nil {
-			return nil, fmt.Errorf("failed to get ConfigMap for OBC %s. error is %v", obc.Name, err)
-		}
 		resourceVersions = append(
 			resourceVersions,
+			stringPair{"obc", obc.ResourceVersion},
+			stringPair{"ob", ob.ResourceVersion},
 			stringPair{"configmap", configMap.ResourceVersion},
-		)
-
-		secret := &corev1.Secret{}
-		secret.Namespace = consumer.Namespace
-		secret.Name = obc.GetName()
-		if err := s.client.Get(
-			ctx,
-			client.ObjectKeyFromObject(secret),
-			secret,
-		); err != nil {
-			return nil, fmt.Errorf("failed to get Secret for OBC %s. error is %v", obc.Name, err)
-		}
-		resourceVersions = append(
-			resourceVersions,
 			stringPair{"secret", secret.ResourceVersion},
 		)
 	}
@@ -1441,17 +1408,6 @@ func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Lo
 	)
 	if err != nil {
 		return nil, err
-	}
-
-	if false {
-		kubeResources, err = s.appendNoobaaKubeResources(
-			ctx,
-			kubeResources,
-			consumer,
-		)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	kubeResources, err = s.appendOBCResources(
@@ -2263,132 +2219,76 @@ func (s *OCSProviderServer) appendOBCResources(
 		obcList,
 		client.InNamespace(consumer.Namespace),
 		client.MatchingLabels{
-			storageConsumerUUIDLabelKey: string(consumer.GetUID()),
+			storageConsumerUUIDLabelKey: string(consumer.UID),
 		},
 	); err != nil {
-		return nil, fmt.Errorf("failed to list OBCs for consumer %v. %v", consumer.GetUID(), err)
+		return nil, fmt.Errorf("failed to list OBCs for consumer %v. %v", consumer.UID, err)
 	}
 
 	// OB, ConfigMap and Secrets can be obtained by using the OBC names
 	for i := range obcList.Items {
 		obc := &obcList.Items[i]
-		remoteOBCName := obc.GetLabels()[remoteObcNameLabelKey]
-		remoteOBCNamespace := obc.GetLabels()[remoteObcNamespaceLabelKey]
+		remoteOBCName := obc.Labels[remoteObcNameLabelKey]
+		remoteOBCNamespace := obc.Labels[remoteObcNamespaceLabelKey]
 
-		ob := &nbv1.ObjectBucket{}
-		ob.Name = fmt.Sprintf("obc-%s-%s", consumer.Namespace, obc.GetName())
-		if err := s.client.Get(
-			ctx,
-			client.ObjectKeyFromObject(ob),
-			ob,
-		); err != nil {
-			return nil, fmt.Errorf("failed to get OB for consumer. error is %v", err)
+		ob, configMap, secret, err := s.getOBCRelatedResources(ctx, obc.Name, consumer)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get OBC related resources for consumer %v. %v", consumer.UID, err)
 		}
 
-		ob.SetName(remoteOBCName)
-		kubeResources = append(kubeResources, ob)
+		ob.Name = remoteOBCName
+		configMap.Name = remoteOBCName
+		configMap.Namespace = remoteOBCNamespace
+		secret.Name = remoteOBCName
+		secret.Namespace = remoteOBCNamespace
+		obc.Name = remoteOBCName
+		obc.Namespace = remoteOBCNamespace
 
-		configMap := &corev1.ConfigMap{}
-		configMap.Namespace = consumer.Namespace
-		configMap.Name = obc.GetName()
-		if err := s.client.Get(
-			ctx,
-			client.ObjectKeyFromObject(configMap),
-			configMap,
-		); err != nil {
-			return nil, fmt.Errorf("failed to get ConfigMap for OBC %s. error is %v", obc.Name, err)
-		}
-		configMap.SetName(remoteOBCName)
-		configMap.SetNamespace(remoteOBCNamespace)
-		kubeResources = append(kubeResources, configMap)
-
-		secret := &corev1.Secret{}
-		secret.Namespace = consumer.Namespace
-		secret.Name = obc.GetName()
-		if err := s.client.Get(
-			ctx,
-			client.ObjectKeyFromObject(secret),
-			secret,
-		); err != nil {
-			return nil, fmt.Errorf("failed to get Secret for OBC %s. error is %v", obc.Name, err)
-		}
-
-		secret.SetName(remoteOBCName)
-		secret.SetNamespace(remoteOBCNamespace)
-		kubeResources = append(kubeResources, secret)
-
-		obc.SetName(remoteOBCName)
-		obc.SetNamespace(remoteOBCNamespace)
-		kubeResources = append(kubeResources, obc)
+		kubeResources = append(kubeResources, obc, ob, configMap, secret)
 	}
 
 	return kubeResources, nil
 }
 
-func (s *OCSProviderServer) appendNoobaaKubeResources(
+func (s *OCSProviderServer) getOBCRelatedResources(
 	ctx context.Context,
-	kubeResources []client.Object,
+	obcName string,
 	consumer *ocsv1alpha1.StorageConsumer,
-) ([]client.Object, error) {
-	// Noobaa Configuration
-	// Fetch noobaa remote secret and management address and append to extResources
-	noobaaOperatorSecret := &corev1.Secret{}
-	noobaaOperatorSecret.Name = fmt.Sprintf("noobaa-account-%s", consumer.Name)
-	noobaaOperatorSecret.Namespace = s.namespace
+) (*nbv1.ObjectBucket, *corev1.ConfigMap, *corev1.Secret, error) {
 
-	if err := s.client.Get(ctx, client.ObjectKeyFromObject(noobaaOperatorSecret), noobaaOperatorSecret); kerrors.IsNotFound(err) {
-		return kubeResources, nil
-	} else if err != nil {
-		return kubeResources, fmt.Errorf("failed to get %s secret. %v", noobaaOperatorSecret.Name, err)
+	ob := &nbv1.ObjectBucket{}
+	ob.Name = fmt.Sprintf("obc-%s-%s", consumer.Namespace, obcName)
+	if err := s.client.Get(
+		ctx,
+		client.ObjectKeyFromObject(ob),
+		ob,
+	); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to get OB for consumer. error is %v", err)
 	}
 
-	authToken, ok := noobaaOperatorSecret.Data["auth_token"]
-	if !ok || len(authToken) == 0 {
-		return kubeResources, fmt.Errorf("auth_token not found in %s secret", noobaaOperatorSecret.Name)
+	configMap := &corev1.ConfigMap{}
+	configMap.Namespace = consumer.Namespace
+	configMap.Name = obcName
+	if err := s.client.Get(
+		ctx,
+		client.ObjectKeyFromObject(configMap),
+		configMap,
+	); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to get ConfigMap for OBC %s. error is %v", obcName, err)
 	}
 
-	noobaMgmtRoute := &routev1.Route{}
-	noobaMgmtRoute.Name = "noobaa-mgmt"
-	noobaMgmtRoute.Namespace = s.namespace
-
-	if err := s.client.Get(ctx, client.ObjectKeyFromObject(noobaMgmtRoute), noobaMgmtRoute); err != nil {
-		return kubeResources, fmt.Errorf("failed to get noobaa-mgmt route. %v", err)
-	}
-	if len(noobaMgmtRoute.Status.Ingress) == 0 {
-		return kubeResources, fmt.Errorf("no Ingress available in noobaa-mgmt route")
-	}
-
-	noobaaMgmtAddress := noobaMgmtRoute.Status.Ingress[0].Host
-	if noobaaMgmtAddress == "" {
-		return kubeResources, fmt.Errorf("no Host found in noobaa-mgmt route Ingress")
+	secret := &corev1.Secret{}
+	secret.Namespace = consumer.Namespace
+	secret.Name = obcName
+	if err := s.client.Get(
+		ctx,
+		client.ObjectKeyFromObject(secret),
+		secret,
+	); err != nil {
+		return nil, nil, nil, fmt.Errorf("failed to get Secret for OBC %s. error is %v", obcName, err)
 	}
 
-	kubeResources = append(kubeResources,
-		&corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "noobaa-remote-join-secret",
-				Namespace: consumer.Status.Client.OperatorNamespace,
-			},
-			Data: map[string][]byte{
-				"auth_token": authToken,
-				"mgmt_addr":  []byte(noobaaMgmtAddress),
-			},
-		},
-		&nbv1.NooBaa{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "noobaa-remote",
-				Namespace: consumer.Status.Client.OperatorNamespace,
-			},
-			Spec: nbv1.NooBaaSpec{
-				JoinSecret: &corev1.SecretReference{
-					Name:      "noobaa-remote-join-secret",
-					Namespace: consumer.Status.Client.OperatorNamespace,
-				},
-			},
-		},
-	)
-
-	return kubeResources, nil
+	return ob, configMap, secret, nil
 }
 
 func (s *OCSProviderServer) getResourceVersions(
