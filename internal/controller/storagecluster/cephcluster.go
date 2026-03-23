@@ -3,6 +3,7 @@ package storagecluster
 import (
 	// The embed package is required for the prometheus rule files
 	_ "embed"
+	"os"
 	"time"
 
 	"bytes"
@@ -736,6 +737,9 @@ func getReplicasPerFailureDomain(sc *ocsv1.StorageCluster) int {
 func getCephPoolReplicatedSize(sc *ocsv1.StorageCluster) uint {
 	if arbiterEnabled(sc) {
 		return uint(4)
+	}
+	if os.Getenv(util.IsTNFClusterEnvVar) == "true" {
+		return uint(2)
 	}
 	return uint(3)
 }
@@ -1564,6 +1568,14 @@ func getCephClusterCephConfig(r *StorageClusterReconciler, sc *ocsv1.StorageClus
 	// Set mon_warn_on_pool_no_redundancy to false only if non-resilient pools are enabled
 	if sc.Spec.ManagedResources.CephNonResilientPools.Enable {
 		cephConfig["global"]["mon_warn_on_pool_no_redundancy"] = "false"
+	}
+
+	// Set cephConfg options for TNF cluster
+	if r.isTnfCluster {
+		cephConfig["global"]["osd_pool_default_size"] = "2"
+		cephConfig["global"]["osd_heartbeat_grace"] = "20"
+		cephConfig["global"]["mon_osd_down_out_interval"] = "120"
+		cephConfig["global"]["mon_osd_report_timeout"] = "120"
 	}
 
 	// Configure public network if the cluster is dualstack, but not multus

@@ -325,6 +325,92 @@ var (
 		},
 	}
 
+	// Limits are intentionally set to nil for all the daemons except osd.
+	TNFResources = map[string]corev1.ResourceRequirements{
+		"crashcollector": {
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("50Mi"),
+			},
+		},
+		"exporter": {
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("50Mi"),
+			},
+		},
+		"logcollector": {
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("50Mi"),
+			},
+		},
+		"mds": {
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("100m"),
+				corev1.ResourceMemory: resource.MustParse("2Gi"),
+			},
+		},
+		"mgr": {
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("100m"),
+				corev1.ResourceMemory: resource.MustParse("250Mi"),
+			},
+		},
+		"mgr-sidecar": {
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("75Mi"),
+			},
+		},
+		"mon": {
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("100m"),
+				corev1.ResourceMemory: resource.MustParse("250Mi"),
+			},
+		},
+		"ocs-metrics-exporter": {
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("50m"),
+				corev1.ResourceMemory: resource.MustParse("100Mi"),
+			},
+		},
+		"kube-rbac-proxy-main": {
+			Requests: corev1.ResourceList{
+				"memory": resource.MustParse("40Mi"),
+				"cpu":    resource.MustParse("50m"),
+			},
+		},
+		"ocs-provider-server": {
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("100Mi"),
+			},
+		},
+		"odf-blackbox-exporter": {
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("75Mi"),
+			},
+		},
+		"rook-ceph-tools": {
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("10m"),
+				corev1.ResourceMemory: resource.MustParse("100Mi"),
+			},
+		},
+		"osd": {
+			Requests: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("350m"),
+				corev1.ResourceMemory: resource.MustParse("2Gi"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceCPU:    resource.MustParse("700m"),
+				corev1.ResourceMemory: resource.MustParse("4Gi"),
+			},
+		},
+	}
+
 	MonitoringResources = map[string]corev1.ResourceRequirements{
 		"alertmanager": {
 			Requests: corev1.ResourceList{

@@ -1,9 +1,11 @@
 package storagecluster
 
 import (
+	"os"
 	"testing"
 
 	ocsv1 "github.com/red-hat-storage/ocs-operator/api/v4/v1"
+	"github.com/red-hat-storage/ocs-operator/v4/pkg/util"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -587,6 +589,166 @@ func TestAdjustCPURequests(t *testing.T) {
 					assert.True(t, exists, "Expected limit for %s to exist", resource)
 					assert.Equal(t, expected.MilliValue(), actual.MilliValue(), "Limit for %s mismatch: expected %s, got %s", resource, expected.String(), actual.String())
 				}
+			}
+		})
+	}
+}
+
+func TestTNFDaemonResources(t *testing.T) {
+	testCases := []struct {
+		name                         string
+		daemonName                   string
+		expectedResourceRequirements corev1.ResourceRequirements
+	}{
+		{
+			name:       "mgr resources for tnf",
+			daemonName: "mgr",
+			expectedResourceRequirements: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("0.1"),
+					corev1.ResourceMemory: resource.MustParse("250Mi"),
+				},
+				Limits: corev1.ResourceList{},
+			},
+		},
+		{
+			name:       "mon resources for tnf",
+			daemonName: "mon",
+			expectedResourceRequirements: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("0.1"),
+					corev1.ResourceMemory: resource.MustParse("250Mi"),
+				},
+				Limits: corev1.ResourceList{},
+			},
+		},
+		{
+			name:       "osd resources for tnf",
+			daemonName: "osd",
+			expectedResourceRequirements: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("350m"),
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("700m"),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+			},
+		},
+		{
+			name:       "mds resources for tnf",
+			daemonName: "mds",
+			expectedResourceRequirements: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("0.1"),
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+				Limits: corev1.ResourceList{},
+			},
+		},
+		{
+			name:       "rgw resources for tnf",
+			daemonName: "rgw",
+			expectedResourceRequirements: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("2"),
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+			},
+		},
+		{
+			name:       "noobaa-core resources for tnf",
+			daemonName: "noobaa-core",
+			expectedResourceRequirements: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("999m"),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("999m"),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+			},
+		},
+		{
+			name:       "noobaa-db resources for tnf",
+			daemonName: "noobaa-db",
+			expectedResourceRequirements: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("500m"),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("500m"),
+					corev1.ResourceMemory: resource.MustParse("4Gi"),
+				},
+			},
+		},
+		{
+			name:       "ocs-metrics-exporter resources for tnf",
+			daemonName: "ocs-metrics-exporter",
+			expectedResourceRequirements: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("50m"),
+					corev1.ResourceMemory: resource.MustParse("100Mi"),
+				},
+				Limits: corev1.ResourceList{},
+			},
+		},
+		{
+			name:       "crashcollector resources for tnf",
+			daemonName: "crashcollector",
+			expectedResourceRequirements: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("10m"),
+					corev1.ResourceMemory: resource.MustParse("50Mi"),
+				},
+				Limits: corev1.ResourceList{},
+			},
+		},
+		{
+			name:       "logcollector resources for tnf",
+			daemonName: "logcollector",
+			expectedResourceRequirements: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("10m"),
+					corev1.ResourceMemory: resource.MustParse("50Mi"),
+				},
+				Limits: corev1.ResourceList{},
+			},
+		},
+	}
+
+	err := os.Setenv(util.IsTNFClusterEnvVar, "true")
+	assert.NoError(t, err, "Failed to set TNF_CLUSTER env variable as true")
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			sc := &ocsv1.StorageCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+			}
+
+			result := getDaemonResources(tc.daemonName, sc)
+
+			// Check requests
+			for resource, expected := range tc.expectedResourceRequirements.Requests {
+				actual, exists := result.Requests[resource]
+				assert.True(t, exists, "Expected request for %s to exist", resource)
+				assert.Equal(t, expected.String(), actual.String(), "Request for %s mismatch", resource)
+			}
+
+			// Check limits
+			for resource, expected := range tc.expectedResourceRequirements.Limits {
+				actual, exists := result.Limits[resource]
+				assert.True(t, exists, "Expected limit for %s to exist", resource)
+				assert.Equal(t, expected.String(), actual.String(), "Limit for %s mismatch", resource)
 			}
 		})
 	}

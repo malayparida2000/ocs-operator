@@ -346,7 +346,7 @@ func createFakeInitializationStorageClusterReconciler(t *testing.T, obj ...runti
 	infrastructure := &configv1.Infrastructure{
 		ObjectMeta: metav1.ObjectMeta{Name: "cluster"},
 		Status: configv1.InfrastructureStatus{
-			ControlPlaneTopology: configv1.DualReplicaTopologyMode,
+			ControlPlaneTopology: "HighlyAvailable",
 		},
 	}
 

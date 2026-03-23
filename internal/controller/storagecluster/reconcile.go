@@ -4,6 +4,7 @@ import (
 	"context"
 	error1 "errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -478,6 +479,12 @@ func (r *StorageClusterReconciler) reconcilePhases(
 	}
 	r.isTnfCluster = infrastructure.Status.ControlPlaneTopology == configv1.DualReplicaTopologyMode
 	r.Log.Info("cluster is Tnf cluster", "value", r.isTnfCluster)
+
+	if r.isTnfCluster {
+		if err = os.Setenv(util.IsTNFClusterEnvVar, "true"); err != nil {
+			return reconcile.Result{}, fmt.Errorf("failed to set IS_TNF_CLUSTER env variable: %v", err)
+		}
+	}
 
 	// in-memory conditions should start off empty. It will only ever hold
 	// negative conditions (!Available, Degraded, Progressing)
