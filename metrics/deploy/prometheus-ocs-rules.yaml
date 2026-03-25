@@ -95,7 +95,7 @@ spec:
         severity_level: warning
         storage_type: ceph
       expr: |
-        (ocs_pool_mirroring_image_health{job="ocs-metrics-exporter"}  * on (namespace, managedBy, rados_namespace) group_left() (max by(namespace, managedBy, rados_namespace) (ocs_pool_mirroring_status{job="ocs-metrics-exporter"}))) == 1
+        (ocs_pool_mirroring_image_health{job="ocs-metrics-exporter"}  * on (namespace, managedBy, rados_namespace, consumer_name) group_left() (max by(namespace, managedBy, rados_namespace, consumer_name) (ocs_pool_mirroring_status{job="ocs-metrics-exporter"}))) == 1
       for: 1m
       labels:
         mirroring_image_status: unknown
@@ -111,7 +111,7 @@ spec:
         severity_level: warning
         storage_type: ceph
       expr: |
-        (ocs_pool_mirroring_image_health{job="ocs-metrics-exporter"}  * on (namespace, managedBy, rados_namespace) group_left() (max by(namespace, managedBy, rados_namespace) (ocs_pool_mirroring_status{job="ocs-metrics-exporter"}))) == 2
+        (ocs_pool_mirroring_image_health{job="ocs-metrics-exporter"}  * on (namespace, managedBy, rados_namespace, consumer_name) group_left() (max by(namespace, managedBy, rados_namespace, consumer_name) (ocs_pool_mirroring_status{job="ocs-metrics-exporter"}))) == 2
       for: 1m
       labels:
         mirroring_image_status: warning
@@ -127,43 +127,40 @@ spec:
         severity_level: error
         storage_type: ceph
       expr: |
-        (ocs_pool_mirroring_image_health{job="ocs-metrics-exporter"}  * on (namespace, managedBy, rados_namespace) group_left() (max by(namespace, managedBy, rados_namespace) (ocs_pool_mirroring_status{job="ocs-metrics-exporter"}))) == 3
+        (ocs_pool_mirroring_image_health{job="ocs-metrics-exporter"}  * on (namespace, managedBy, rados_namespace, consumer_name) group_left() (max by(namespace, managedBy, rados_namespace, consumer_name) (ocs_pool_mirroring_status{job="ocs-metrics-exporter"}))) == 3
       for: 10s
       labels:
         mirroring_image_status: error
         severity: critical
     - alert: ODFPersistentVolumeMirrorStatus
       annotations:
-        description: Persistent volume {{ $labels.name }}/{{ $labels.namespace }}
-          is not mirrored properly to peer site {{ $labels.site_name }} for more than
-          1m. RBD image={{ $labels.image }} and CephBlockPool={{ $labels.pool_name
-          }}. Please check namespace:cluster {{ $labels.namespace }}:{{ $labels.managedBy
-          }}.
-        message: Persistent volume {{ $labels.name }}/{{ $labels.namespace }} is not
-          mirrored properly to peer site {{ $labels.site_name }} in namespace:cluster
-          {{ $labels.namespace }}:{{ $labels.managedBy }}.
+        description: Persistent volume {{ $labels.name }} is not mirrored properly
+          to peer site {{ $labels.site_name }} for more than 1m. RBD image={{ $labels.image
+          }} and CephBlockPool={{ $labels.pool_name }}. Please check namespace {{
+          $labels.namespace }}.
+        message: Persistent volume {{ $labels.name }} is not mirrored properly to
+          peer site {{ $labels.site_name }} in namespace {{ $labels.namespace }}.
         runbook_url: https://github.com/openshift/runbooks/blob/master/alerts/openshift-container-storage-operator/ODFPersistentVolumeMirrorStatus.md
         severity_level: error
         storage_type: ceph
       expr: |
-        ocs_rbd_mirror_image_state{job="ocs-metrics-exporter"} * on(image,pool_name) group_left(name,namespace,managedBy) ocs_rbd_pv_metadata{job="ocs-metrics-exporter"} == 1
+        ocs_rbd_mirror_image_state{job="ocs-metrics-exporter"} * on(image,pool_name,consumer_name) group_left(name) ocs_rbd_pv_metadata{job="ocs-metrics-exporter"} == 1
       for: 1m
       labels:
         severity: critical
     - alert: ODFPersistentVolumeMirrorStatus
       annotations:
-        description: Status unknown for Persistent volume {{ $labels.name }}/{{ $labels.namespace
-          }} to peer site {{ $labels.site_name }} for more than 1m. RBD image={{ $labels.image
-          }} and CephBlockPool={{ $labels.pool_name }}. Please check namespace:cluster
-          {{ $labels.namespace }}:{{ $labels.managedBy }}
-        message: Status unknown for Persistent volume {{ $labels.name }}/{{ $labels.namespace
-          }} mirroring to peer site {{ $labels.site_name }} in namespace:cluster {{
-          $labels.namespace }}:{{ $labels.managedBy }}.
+        description: Status unknown for Persistent volume {{ $labels.name }} to peer
+          site {{ $labels.site_name }} for more than 1m. RBD image={{ $labels.image
+          }} and CephBlockPool={{ $labels.pool_name }}. Please check namespace {{
+          $labels.namespace }}.
+        message: Status unknown for Persistent volume {{ $labels.name }} mirroring
+          to peer site {{ $labels.site_name }} in namespace {{ $labels.namespace }}.
         runbook_url: https://github.com/openshift/runbooks/blob/master/alerts/openshift-container-storage-operator/ODFPersistentVolumeMirrorStatus.md
         severity_level: warning
         storage_type: ceph
       expr: |
-        ocs_rbd_mirror_image_state{job="ocs-metrics-exporter"} * on(image,pool_name) group_left(name,namespace,managedBy) ocs_rbd_pv_metadata{job="ocs-metrics-exporter"} == 0
+        ocs_rbd_mirror_image_state{job="ocs-metrics-exporter"} * on(image,pool_name,consumer_name) group_left(name) ocs_rbd_pv_metadata{job="ocs-metrics-exporter"} == 0
       for: 1m
       labels:
         severity: warning
@@ -260,26 +257,17 @@ spec:
     rules:
     - alert: ODFRBDClientBlocked
       annotations:
-        description: An RBD client might be blocked by Ceph on node {{ $labels.node_name
-          }} in namespace:cluster {{ $labels.namespace }}:{{ $labels.managedBy }}.
-          This alert is triggered when the ocs_rbd_client_blocklisted metric reports
-          a value of 1 for the node and there are pods in a CreateContainerError state
-          on the node. This may cause the filesystem for the PVCs to be in a read-only
-          state. Please check the pod description for more details.
-        message: An RBD client might be blocked by Ceph on node {{ $labels.node_name
-          }} in namespace:cluster {{ $labels.namespace }}:{{ $labels.managedBy }}.
+        description: An RBD client is blocklisted by Ceph on node {{ $labels.node
+          }} for more than 30 minutes in namespace:cluster {{ $labels.namespace }}:{{
+          $labels.managedBy }}. This may cause PVCs on this node to become read-only.
+          Check for network partitions or crashed RBD client processes.
+        message: RBD client blocklisted on node {{ $labels.node }} in namespace:cluster
+          {{ $labels.namespace }}:{{ $labels.managedBy }}.
         runbook_url: https://github.com/openshift/runbooks/blob/master/alerts/openshift-container-storage-operator/ODFRBDClientBlocked.md
         severity_level: error
       expr: |
-        (
-          ocs_rbd_client_blocklisted{node=~".+"} == 1
-        )
-        and on(node) (
-          kube_pod_container_status_waiting_reason{reason="CreateContainerError"}
-          * on(pod, namespace, managedBy) group_left(node)
-          kube_pod_info
-        ) > 0
-      for: 10s
+        ocs_rbd_client_blocklisted{node=~".+", job="ocs-metrics-exporter"} == 1
+      for: 30m
       labels:
         severity: warning
   - name: ocs-encryption-alert.rules
