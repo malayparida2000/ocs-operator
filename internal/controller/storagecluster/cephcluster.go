@@ -1124,6 +1124,14 @@ func generateMonSpec(sc *ocsv1.StorageCluster, isTnfCLuster bool) rookCephv1.Mon
 	if arbiterEnabled(sc) {
 		spec.StretchCluster = generateStretchClusterSpec(sc)
 	}
+
+	// Values of the spec are taken care off by rook
+	if isTnfCLuster {
+		spec.FloatingMon = rookCephv1.FloatingMonSpec{
+			Name:          "mon-c",
+			ConfigMapName: "drbd-configure",
+		}
+	}
 	return spec
 }
 
