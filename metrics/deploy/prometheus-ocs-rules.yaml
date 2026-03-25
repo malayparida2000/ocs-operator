@@ -16,6 +16,152 @@ spec:
     - expr: |
         sum by (namespace, managedBy) (topk by (ceph_daemon) (1, label_replace(ceph_disk_occupation{job="rook-ceph-mgr"}, "device", "$1", "device", "/dev/(.*)")) * on(instance, device) group_left topk by (instance,device) (1, (rate(node_disk_write_time_seconds_total[1m]) / (clamp_min(rate(node_disk_writes_completed_total[1m]), 1)))))
       record: cluster:ceph_disk_latency_write:join_ceph_node_disk_rate1m
+  - name: cephfs-subvolume-mapping.rules
+    rules:
+    - record: odf_cephfs_subvolume_read_iops_with_pv
+      expr: |
+        label_replace(
+          ceph_mds_subvolume_metrics_avg_read_iops,
+          "subvolume", "$1", "subvolume_path", ".*/([^/]+)$"
+        )
+        * on(subvolume) group_left(
+            pv_name,          
+            pvc_namespace,         
+            fs_name,
+          )
+        label_replace(
+          label_replace(
+            label_replace(
+              ocs_cephfs_pv_metadata,
+              "pv_name", "$1", "name", "(.*)"
+            ),
+            "pvc_namespace", "$1", "namespace", "(.*)"
+          ),
+          "fs_name", "$1", "volume", "(.*)"
+        )
+      labels:
+        system_type: OCS
+        system_vendor: Red Hat
+    - record: odf_cephfs_subvolume_write_iops_with_pv
+      expr: |
+        label_replace(
+          ceph_mds_subvolume_metrics_avg_write_iops,
+          "subvolume", "$1", "subvolume_path", ".*/([^/]+)$"
+        )
+        * on(subvolume) group_left(
+            pv_name,          
+            pvc_namespace,         
+            fs_name,
+          )
+        label_replace(
+          label_replace(
+            label_replace(
+              ocs_cephfs_pv_metadata,
+              "pv_name", "$1", "name", "(.*)"
+            ),
+            "pvc_namespace", "$1", "namespace", "(.*)"
+          ),
+          "fs_name", "$1", "volume", "(.*)"
+        )
+      labels:
+        system_type: OCS
+        system_vendor: Red Hat
+    - record: odf_cephfs_subvolume_read_latency_msec_with_pv
+      expr: |
+        label_replace(
+          ceph_mds_subvolume_metrics_avg_read_lat_msec,
+          "subvolume", "$1", "subvolume_path", ".*/([^/]+)$"
+        )
+        * on(subvolume) group_left(
+            pv_name,          
+            pvc_namespace,         
+            fs_name,
+          )
+        label_replace(
+          label_replace(
+            label_replace(
+              ocs_cephfs_pv_metadata,
+              "pv_name", "$1", "name", "(.*)"
+            ),
+            "pvc_namespace", "$1", "namespace", "(.*)"
+          ),
+          "fs_name", "$1", "volume", "(.*)"
+        )
+      labels:
+        system_type: OCS
+        system_vendor: Red Hat
+    - record: odf_cephfs_subvolume_write_latency_msec_with_pv
+      expr: |
+        label_replace(
+          ceph_mds_subvolume_metrics_avg_write_lat_msec,
+          "subvolume", "$1", "subvolume_path", ".*/([^/]+)$"
+        )
+        * on(subvolume) group_left(
+            pv_name,          
+            pvc_namespace,         
+            fs_name,
+          )
+        label_replace(
+          label_replace(
+            label_replace(
+              ocs_cephfs_pv_metadata,
+              "pv_name", "$1", "name", "(.*)"
+            ),
+            "pvc_namespace", "$1", "namespace", "(.*)"
+          ),
+          "fs_name", "$1", "volume", "(.*)"
+        )
+      labels:
+        system_type: OCS
+        system_vendor: Red Hat
+    - record: odf_cephfs_subvolume_read_throughput_bps_with_pv
+      expr: |
+        label_replace(
+          ceph_mds_subvolume_metrics_avg_read_tp_Bps,
+          "subvolume", "$1", "subvolume_path", ".*/([^/]+)$"
+        )
+        * on(subvolume) group_left(
+            pv_name,          
+            pvc_namespace,         
+            fs_name,
+          )
+        label_replace(
+          label_replace(
+            label_replace(
+              ocs_cephfs_pv_metadata,
+              "pv_name", "$1", "name", "(.*)"
+            ),
+            "pvc_namespace", "$1", "namespace", "(.*)"
+          ),
+          "fs_name", "$1", "volume", "(.*)"
+        )
+      labels:
+        system_type: OCS
+        system_vendor: Red Hat
+    - record: odf_cephfs_subvolume_write_throughput_bps_with_pv
+      expr: |
+        label_replace(
+          ceph_mds_subvolume_metrics_avg_write_tp_Bps,
+          "subvolume", "$1", "subvolume_path", ".*/([^/]+)$"
+        )
+        * on(subvolume) group_left(
+            pv_name,          
+            pvc_namespace,         
+            fs_name,
+          )
+        label_replace(
+          label_replace(
+            label_replace(
+              ocs_cephfs_pv_metadata,
+              "pv_name", "$1", "name", "(.*)"
+            ),
+            "pvc_namespace", "$1", "namespace", "(.*)"
+          ),
+          "fs_name", "$1", "volume", "(.*)"
+        )
+      labels:
+        system_type: OCS
+        system_vendor: Red Hat
   - name: ODF_standardized_metrics.rules
     rules:
     - expr: |
