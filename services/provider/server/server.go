@@ -26,8 +26,8 @@ import (
 	ocsv1 "github.com/red-hat-storage/ocs-operator/api/v4/v1"
 	ocsv1alpha1 "github.com/red-hat-storage/ocs-operator/api/v4/v1alpha1"
 	pb "github.com/red-hat-storage/ocs-operator/services/provider/api/v4"
-	"github.com/red-hat-storage/ocs-operator/v4/controllers/defaults"
-	"github.com/red-hat-storage/ocs-operator/v4/controllers/util"
+	"github.com/red-hat-storage/ocs-operator/v4/pkg/defaults"
+	"github.com/red-hat-storage/ocs-operator/v4/pkg/util"
 	"github.com/red-hat-storage/ocs-operator/v4/services"
 	ocsVersion "github.com/red-hat-storage/ocs-operator/v4/version"
 
