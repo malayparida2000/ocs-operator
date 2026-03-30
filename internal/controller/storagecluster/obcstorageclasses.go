@@ -17,7 +17,7 @@ func (s *obcStorageClasses) ensureCreated(r *StorageClusterReconciler, storageCl
 
 	if skip, err := platform.PlatformsShouldSkipObjectStore(); err != nil {
 		r.Log.Error(err, "failed to identify if ObjectStore SC should be created")
-	} else if skip {
+	} else if skip || r.isTnfCluster {
 		return ctrl.Result{}, nil
 	}
 

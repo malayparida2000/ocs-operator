@@ -1,12 +1,14 @@
 package storagecluster
 
 import (
+	"os"
 	"runtime"
 	"strconv"
 	"strings"
 
 	ocsv1 "github.com/red-hat-storage/ocs-operator/api/v4/v1"
 	"github.com/red-hat-storage/ocs-operator/v4/pkg/defaults"
+	"github.com/red-hat-storage/ocs-operator/v4/pkg/util"
 	rookCephv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -18,8 +20,10 @@ const (
 )
 
 // getDaemonResources returns ResourceRequirements for the given daemon name based on the storage cluster's resource profile.
-// If any resource requirements are specified in the storage cluster, they are merged resource type wise with the profile defaults.
-// If based on resource profile, no resources are specified, then fallback to daemon resources.
+// If isTNFCluster is true, it returns resources from TNFResources map.
+// Otherwise:
+// 1. If any resource requirements are specified in the storage cluster, they are merged resource type wise with the profile defaults.
+// 2. If based on resource profile, no resources are specified, then fallback to daemon resources.
 func getDaemonResources(name string, sc *ocsv1.StorageCluster) corev1.ResourceRequirements {
 	var resourceRequirements corev1.ResourceRequirements
 	var defaultResourceRequirements corev1.ResourceRequirements
@@ -34,6 +38,14 @@ func getDaemonResources(name string, sc *ocsv1.StorageCluster) corev1.ResourceRe
 	default:
 		profileResources = defaults.BalancedDaemonResources
 	}
+
+	// We should default to BalancedDaemonResources/sc.Spec.ResourceProfile, if the resource doesn't exist in TNFResources map
+	if os.Getenv(util.IsTNFClusterEnvVar) == "true" {
+		if _, found := defaults.TNFResources[name]; found {
+			profileResources = defaults.TNFResources
+		}
+	}
+
 	// Try to get resource requirements from the profiled resources map first
 	if profileResource, found := profileResources[name]; found {
 		defaultResourceRequirements = profileResource

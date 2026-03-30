@@ -42,6 +42,9 @@ const (
 	// SingleNodeEnvVar is set if StorageCluster needs to be deployed on a single node
 	SingleNodeEnvVar = "SINGLE_NODE"
 
+	// IsTNFClusterEnvVar is set if cluster is a TNF cluster
+	IsTNFClusterEnvVar = "IS_TNF_CLUSTER"
+
 	// This configmap is purely for the OCS operator to use.
 	OcsOperatorConfigName = "ocs-operator-config"
 
