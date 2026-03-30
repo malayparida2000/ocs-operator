@@ -169,7 +169,10 @@ message ReportStatusRequest{
     string clientID = 8;
     // ocs-client-operator deployed namespace
     string clientOperatorNamespace = 9;
-
+    // cephFsPVCount is the number of CephFS PersistentVolumes on the client cluster
+    uint32 cephFsPVCount = 10;
+    // cephFsVolumeSnapshotContentCount is the number of CephFS VolumeSnapshotContent resources
+    uint32 cephFsVolumeSnapshotContentCount = 11;
 }
 
 message ReportStatusResponse{
