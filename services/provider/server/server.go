@@ -121,6 +121,12 @@ type sanitizeFlags struct {
 	skipStatus   bool
 }
 
+type kubeObjectWithOpRecord struct {
+	kubeObject  client.Object
+	clientOp    pb.KubeClientOp
+	subResource *pb.SubResource
+}
+
 func NewOCSProviderServer(ctx context.Context, namespace string) (*OCSProviderServer, error) {
 	scheme, err := newScheme()
 	if err != nil {
@@ -294,7 +300,7 @@ func (s *OCSProviderServer) GetDesiredClientState(ctx context.Context, req *pb.G
 	case ocsv1alpha1.StorageConsumerStateDeleting:
 		return nil, status.Errorf(codes.NotFound, "StorageConsumer is in deleting phase")
 	case ocsv1alpha1.StorageConsumerStateReady:
-		kubeResources, err := s.getKubeResources(ctx, logger, consumer)
+		records, err := s.getKubeResources(ctx, logger, consumer)
 		if err != nil {
 			logger.Error(err, "failed to get kube resources")
 			return nil, status.Errorf(codes.Internal, "failed to produce client state")
@@ -302,7 +308,8 @@ func (s *OCSProviderServer) GetDesiredClientState(ctx context.Context, req *pb.G
 
 		response := &pb.GetDesiredClientStateResponse{}
 
-		for _, kubeResource := range kubeResources {
+		for i := range records {
+			kubeResource := records[i].kubeObject
 			gvk, err := apiutil.GVKForObject(kubeResource, s.scheme)
 			if err != nil {
 				return nil, err
@@ -339,7 +346,11 @@ func (s *OCSProviderServer) GetDesiredClientState(ctx context.Context, req *pb.G
 				)
 			}
 			kubeResourceBytes := util.JsonMustMarshal(kubeResource)
-			response.KubeObjects = append(response.KubeObjects, &pb.KubeObject{Bytes: kubeResourceBytes})
+			response.KubeObjects = append(response.KubeObjects, &pb.KubeObject{
+				Bytes:       kubeResourceBytes,
+				Op:          records[i].clientOp,
+				SubResource: records[i].subResource,
+			})
 		}
 
 		channelName, err := s.getOCSSubscriptionChannel(ctx)
@@ -1215,7 +1226,7 @@ func (s *OCSProviderServer) isConsumerMirrorEnabled(ctx context.Context, consume
 	return clientMappingConfig.Data[consumer.Status.Client.ID] != "", nil
 }
 
-func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Logger, consumer *ocsv1alpha1.StorageConsumer) ([]client.Object, error) {
+func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Logger, consumer *ocsv1alpha1.StorageConsumer) ([]kubeObjectWithOpRecord, error) {
 
 	consumerConfigMap := &corev1.ConfigMap{}
 	if consumer.Status.ResourceNameMappingConfigMap.Name == "" {
@@ -1267,15 +1278,18 @@ func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Lo
 
 	}
 
-	kubeResources := []client.Object{}
+	records := []kubeObjectWithOpRecord{}
 	if cephConnection, err := s.getDesiredCephConnection(ctx, consumer, storageCluster); err == nil {
-		kubeResources = append(kubeResources, cephConnection)
+		records = append(records, kubeObjectWithOpRecord{
+			kubeObject: cephConnection,
+			clientOp:   pb.KubeClientOp_CREATE_OR_UPDATE,
+		})
 	} else {
 		return nil, err
 	}
 
-	kubeResources, err = s.appendClientProfileKubeResources(
-		kubeResources,
+	records, err = s.appendClientProfileKubeResources(
+		records,
 		consumer,
 		consumerConfig,
 		storageCluster,
@@ -1284,9 +1298,9 @@ func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Lo
 		return nil, err
 	}
 
-	kubeResources, err = s.appendCephClientSecretKubeResources(
+	records, err = s.appendCephClientSecretKubeResources(
 		ctx,
-		kubeResources,
+		records,
 		consumer,
 		consumerConfig,
 	)
@@ -1294,10 +1308,10 @@ func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Lo
 		return nil, err
 	}
 
-	kubeResources, err = s.appendStorageClassKubeResources(
+	records, err = s.appendStorageClassKubeResources(
 		ctx,
 		logger,
-		kubeResources,
+		records,
 		consumer,
 		consumerConfig,
 		storageCluster,
@@ -1309,10 +1323,10 @@ func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Lo
 		return nil, err
 	}
 
-	kubeResources, err = s.appendVolumeSnapshotClassKubeResources(
+	records, err = s.appendVolumeSnapshotClassKubeResources(
 		ctx,
 		logger,
-		kubeResources,
+		records,
 		consumer,
 		consumerConfig,
 		storageCluster,
@@ -1323,10 +1337,10 @@ func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Lo
 		return nil, err
 	}
 
-	kubeResources, err = s.appendVolumeGroupSnapshotClassKubeResources(
+	records, err = s.appendVolumeGroupSnapshotClassKubeResources(
 		ctx,
 		logger,
-		kubeResources,
+		records,
 		consumer,
 		consumerConfig,
 		storageCluster,
@@ -1337,10 +1351,10 @@ func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Lo
 		return nil, err
 	}
 
-	kubeResources, err = s.appendOdfVolumeGroupSnapshotClassKubeResources(
+	records, err = s.appendOdfVolumeGroupSnapshotClassKubeResources(
 		ctx,
 		logger,
-		kubeResources,
+		records,
 		consumer,
 		consumerConfig,
 		storageCluster,
@@ -1350,10 +1364,10 @@ func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Lo
 		return nil, err
 	}
 
-	kubeResources, err = s.appendNetworkFenceClassKubeResources(
+	records, err = s.appendNetworkFenceClassKubeResources(
 		ctx,
 		logger,
-		kubeResources,
+		records,
 		consumer,
 		consumerConfig,
 		storageCluster,
@@ -1364,10 +1378,10 @@ func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Lo
 		return nil, err
 	}
 
-	kubeResources, err = s.appendVolumeReplicationClassKubeResources(
+	records, err = s.appendVolumeReplicationClassKubeResources(
 		ctx,
 		logger,
-		kubeResources,
+		records,
 		consumer,
 		consumerConfig,
 		rbdStorageId,
@@ -1377,10 +1391,10 @@ func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Lo
 		return nil, err
 	}
 
-	kubeResources, err = s.appendVolumeGroupReplicationClassKubeResources(
+	records, err = s.appendVolumeGroupReplicationClassKubeResources(
 		ctx,
 		logger,
-		kubeResources,
+		records,
 		consumer,
 		consumerConfig,
 		storageCluster,
@@ -1391,17 +1405,17 @@ func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Lo
 		return nil, err
 	}
 
-	kubeResources, err = s.appendClusterResourceQuotaKubeResources(
-		kubeResources,
+	records, err = s.appendClusterResourceQuotaKubeResources(
+		records,
 		consumer,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	kubeResources, err = s.appendClientProfileMappingKubeResources(
+	records, err = s.appendClientProfileMappingKubeResources(
 		ctx,
-		kubeResources,
+		records,
 		consumer,
 		consumerConfig,
 		mirroringTargetInfo,
@@ -1410,9 +1424,9 @@ func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Lo
 		return nil, err
 	}
 
-	kubeResources, err = s.appendOBCResources(
+	records, err = s.appendOBCResources(
 		ctx,
-		kubeResources,
+		records,
 		consumer,
 	)
 
@@ -1420,7 +1434,7 @@ func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Lo
 		return nil, err
 	}
 
-	return kubeResources, nil
+	return records, nil
 }
 
 func (s *OCSProviderServer) getDesiredCephConnection(
@@ -1483,11 +1497,11 @@ func (s *OCSProviderServer) getDesiredCephConnection(
 }
 
 func (s *OCSProviderServer) appendClientProfileKubeResources(
-	kubeResources []client.Object,
+	records []kubeObjectWithOpRecord,
 	consumer *ocsv1alpha1.StorageConsumer,
 	consumerConfig util.StorageConsumerResources,
 	storageCluster *ocsv1.StorageCluster,
-) ([]client.Object, error) {
+) ([]kubeObjectWithOpRecord, error) {
 	var kernelMountOptions map[string]string
 	for _, option := range strings.Split(util.GetCephFSKernelMountOptions(storageCluster), ",") {
 		if kernelMountOptions == nil {
@@ -1579,24 +1593,27 @@ func (s *OCSProviderServer) appendClientProfileKubeResources(
 	}
 
 	for _, profileObj := range profileMap {
-		kubeResources = append(kubeResources, profileObj)
+		records = append(records, kubeObjectWithOpRecord{
+			kubeObject: profileObj,
+			clientOp:   pb.KubeClientOp_CREATE_OR_UPDATE,
+		})
 	}
-	return kubeResources, nil
+	return records, nil
 }
 
 func (s *OCSProviderServer) appendCephClientSecretKubeResources(
 	ctx context.Context,
-	kubeResources []client.Object,
+	records []kubeObjectWithOpRecord,
 	consumer *ocsv1alpha1.StorageConsumer,
 	consumerConfig util.StorageConsumerResources,
-) ([]client.Object, error) {
+) ([]kubeObjectWithOpRecord, error) {
 
 	var err error
 	if destSecretName := consumerConfig.GetCsiRbdProvisionerCephUserName(); destSecretName != "" {
 		srcSecretName := util.GenerateCsiRbdProvisionerCephClientName(csiCephUserCurrGen, consumer.UID)
-		if kubeResources, err = s.appendCephClientSecretKubeResource(
+		if records, err = s.appendCephClientSecretKubeResource(
 			ctx,
-			kubeResources,
+			records,
 			consumer,
 			srcSecretName,
 			destSecretName,
@@ -1606,9 +1623,9 @@ func (s *OCSProviderServer) appendCephClientSecretKubeResources(
 	}
 	if destSecretName := consumerConfig.GetCsiRbdNodeCephUserName(); destSecretName != "" {
 		srcSecretName := util.GenerateCsiRbdNodeCephClientName(csiCephUserCurrGen, consumer.UID)
-		if kubeResources, err = s.appendCephClientSecretKubeResource(
+		if records, err = s.appendCephClientSecretKubeResource(
 			ctx,
-			kubeResources,
+			records,
 			consumer,
 			srcSecretName,
 			destSecretName,
@@ -1618,9 +1635,9 @@ func (s *OCSProviderServer) appendCephClientSecretKubeResources(
 	}
 	if destSecretName := consumerConfig.GetCsiCephFsProvisionerCephUserName(); destSecretName != "" {
 		srcSecretName := util.GenerateCsiCephFsProvisionerCephClientName(csiCephUserCurrGen, consumer.UID)
-		if kubeResources, err = s.appendCephClientSecretKubeResource(
+		if records, err = s.appendCephClientSecretKubeResource(
 			ctx,
-			kubeResources,
+			records,
 			consumer,
 			srcSecretName,
 			destSecretName,
@@ -1630,9 +1647,9 @@ func (s *OCSProviderServer) appendCephClientSecretKubeResources(
 	}
 	if destSecretName := consumerConfig.GetCsiCephFsNodeCephUserName(); destSecretName != "" {
 		srcSecretName := util.GenerateCsiCephFsNodeCephClientName(csiCephUserCurrGen, consumer.UID)
-		if kubeResources, err = s.appendCephClientSecretKubeResource(
+		if records, err = s.appendCephClientSecretKubeResource(
 			ctx,
-			kubeResources,
+			records,
 			consumer,
 			srcSecretName,
 			destSecretName,
@@ -1642,9 +1659,9 @@ func (s *OCSProviderServer) appendCephClientSecretKubeResources(
 	}
 	if destSecretName := consumerConfig.GetCsiNfsProvisionerCephUserName(); destSecretName != "" {
 		srcSecretName := util.GenerateCsiNfsProvisionerCephClientName(csiCephUserCurrGen, consumer.UID)
-		if kubeResources, err = s.appendCephClientSecretKubeResource(
+		if records, err = s.appendCephClientSecretKubeResource(
 			ctx,
-			kubeResources,
+			records,
 			consumer,
 			srcSecretName,
 			destSecretName,
@@ -1654,9 +1671,9 @@ func (s *OCSProviderServer) appendCephClientSecretKubeResources(
 	}
 	if destSecretName := consumerConfig.GetCsiNfsNodeCephUserName(); destSecretName != "" {
 		srcSecretName := util.GenerateCsiNfsNodeCephClientName(csiCephUserCurrGen, consumer.UID)
-		if kubeResources, err = s.appendCephClientSecretKubeResource(
+		if records, err = s.appendCephClientSecretKubeResource(
 			ctx,
-			kubeResources,
+			records,
 			consumer,
 			srcSecretName,
 			destSecretName,
@@ -1665,22 +1682,22 @@ func (s *OCSProviderServer) appendCephClientSecretKubeResources(
 		}
 	}
 
-	return kubeResources, nil
+	return records, nil
 }
 
 func (s *OCSProviderServer) appendCephClientSecretKubeResource(
 	ctx context.Context,
-	kubeResources []client.Object,
+	records []kubeObjectWithOpRecord,
 	consumer *ocsv1alpha1.StorageConsumer,
 	srcSecretName string,
 	destSecretName string,
-) ([]client.Object, error) {
+) ([]kubeObjectWithOpRecord, error) {
 	cephUserSecret := &corev1.Secret{}
 	cephUserSecret.Name = srcSecretName
 	cephUserSecret.Namespace = consumer.Namespace
 
 	if err := s.client.Get(ctx, client.ObjectKeyFromObject(cephUserSecret), cephUserSecret); err != nil {
-		return kubeResources, fmt.Errorf("failed to get %s secret. %v", cephUserSecret, err)
+		return records, fmt.Errorf("failed to get %s secret. %v", cephUserSecret, err)
 	}
 
 	cephUserSecret.Name = destSecretName
@@ -1688,20 +1705,23 @@ func (s *OCSProviderServer) appendCephClientSecretKubeResource(
 	// clearing the secretType to be empty/Opaque instead of type rook.
 	cephUserSecret.Type = ""
 
-	return append(kubeResources, cephUserSecret), nil
+	return append(records, kubeObjectWithOpRecord{
+		kubeObject: cephUserSecret,
+		clientOp:   pb.KubeClientOp_CREATE_OR_UPDATE,
+	}), nil
 }
 
 func (s *OCSProviderServer) appendStorageClassKubeResources(
 	ctx context.Context,
 	logger logr.Logger,
-	kubeResources []client.Object,
+	records []kubeObjectWithOpRecord,
 	consumer *ocsv1alpha1.StorageConsumer,
 	consumerConfig util.StorageConsumerResources,
 	storageCluster *ocsv1.StorageCluster,
 	rbdStorageId,
 	cephFsStorageId string,
 	remoteRbdStorageId string,
-) ([]client.Object, error) {
+) ([]kubeObjectWithOpRecord, error) {
 	scMap := map[string]func() *storagev1.StorageClass{}
 	if consumerConfig.GetRbdClientProfileName() != "" {
 		scMap[util.GenerateNameForCephBlockPoolStorageClass(storageCluster)] = func() *storagev1.StorageClass {
@@ -1830,21 +1850,21 @@ func (s *OCSProviderServer) appendStorageClassKubeResources(
 			}
 		},
 	)
-	kubeResources = append(kubeResources, resources...)
+	records = append(records, resources...)
 
-	return kubeResources, nil
+	return records, nil
 }
 
 func (s *OCSProviderServer) appendVolumeSnapshotClassKubeResources(
 	ctx context.Context,
 	logger logr.Logger,
-	kubeResources []client.Object,
+	records []kubeObjectWithOpRecord,
 	consumer *ocsv1alpha1.StorageConsumer,
 	consumerConfig util.StorageConsumerResources,
 	storageCluster *ocsv1.StorageCluster,
 	rbdStorageId,
 	cephFsStorageId string,
-) ([]client.Object, error) {
+) ([]kubeObjectWithOpRecord, error) {
 	vscMap := map[string]func() *snapapi.VolumeSnapshotClass{}
 	if consumerConfig.GetRbdClientProfileName() != "" {
 		vscMap[util.GenerateNameForSnapshotClass(storageCluster.Name, util.RbdSnapshotter)] = func() *snapapi.VolumeSnapshotClass {
@@ -1897,21 +1917,21 @@ func (s *OCSProviderServer) appendVolumeSnapshotClassKubeResources(
 			}
 		},
 	)
-	kubeResources = append(kubeResources, resources...)
+	records = append(records, resources...)
 
-	return kubeResources, nil
+	return records, nil
 }
 
 func (s *OCSProviderServer) appendVolumeGroupSnapshotClassKubeResources(
 	ctx context.Context,
 	logger logr.Logger,
-	kubeResources []client.Object,
+	records []kubeObjectWithOpRecord,
 	consumer *ocsv1alpha1.StorageConsumer,
 	consumerConfig util.StorageConsumerResources,
 	storageCluster *ocsv1.StorageCluster,
 	rbdStorageId,
 	cephFsStorageId string,
-) ([]client.Object, error) {
+) ([]kubeObjectWithOpRecord, error) {
 	vgscMap := map[string]func() *groupsnapapi.VolumeGroupSnapshotClass{}
 	if consumerConfig.GetRbdClientProfileName() != "" {
 		vgscMap[util.GenerateNameForGroupSnapshotClass(storageCluster, util.RbdGroupSnapshotter)] = func() *groupsnapapi.VolumeGroupSnapshotClass {
@@ -1961,20 +1981,20 @@ func (s *OCSProviderServer) appendVolumeGroupSnapshotClassKubeResources(
 			}
 		},
 	)
-	kubeResources = append(kubeResources, resources...)
+	records = append(records, resources...)
 
-	return kubeResources, nil
+	return records, nil
 }
 
 func (s *OCSProviderServer) appendOdfVolumeGroupSnapshotClassKubeResources(
 	ctx context.Context,
 	logger logr.Logger,
-	kubeResources []client.Object,
+	records []kubeObjectWithOpRecord,
 	consumer *ocsv1alpha1.StorageConsumer,
 	consumerConfig util.StorageConsumerResources,
 	storageCluster *ocsv1.StorageCluster,
 	cephFsStorageId string,
-) ([]client.Object, error) {
+) ([]kubeObjectWithOpRecord, error) {
 	vgscMap := map[string]func() *odfgsapiv1b1.VolumeGroupSnapshotClass{}
 	if consumerConfig.GetCephFsClientProfileName() != "" {
 		vgscMap[util.GenerateNameForGroupSnapshotClass(storageCluster, util.CephfsGroupSnapshotter)] = func() *odfgsapiv1b1.VolumeGroupSnapshotClass {
@@ -2007,21 +2027,21 @@ func (s *OCSProviderServer) appendOdfVolumeGroupSnapshotClassKubeResources(
 			}
 		},
 	)
-	kubeResources = append(kubeResources, resources...)
+	records = append(records, resources...)
 
-	return kubeResources, nil
+	return records, nil
 }
 
 func (s *OCSProviderServer) appendNetworkFenceClassKubeResources(
 	ctx context.Context,
 	logger logr.Logger,
-	kubeResources []client.Object,
+	records []kubeObjectWithOpRecord,
 	consumer *ocsv1alpha1.StorageConsumer,
 	consumerConfig util.StorageConsumerResources,
 	storageCluster *ocsv1.StorageCluster,
 	rbdStorageId,
 	cephFsStorageId string,
-) ([]client.Object, error) {
+) ([]kubeObjectWithOpRecord, error) {
 	nfcMap := map[string]func() *csiaddonsv1alpha1.NetworkFenceClass{}
 	if consumerConfig.GetRbdClientProfileName() != "" {
 		nfcMap[util.GenerateNameForNetworkFenceClass(storageCluster.Name, util.RbdNetworkFenceClass)] = func() *csiaddonsv1alpha1.NetworkFenceClass {
@@ -2057,20 +2077,20 @@ func (s *OCSProviderServer) appendNetworkFenceClassKubeResources(
 			}
 		},
 	)
-	kubeResources = append(kubeResources, resources...)
+	records = append(records, resources...)
 
-	return kubeResources, nil
+	return records, nil
 }
 
 func (s *OCSProviderServer) appendVolumeReplicationClassKubeResources(
 	ctx context.Context,
 	logger logr.Logger,
-	kubeResources []client.Object,
+	records []kubeObjectWithOpRecord,
 	consumer *ocsv1alpha1.StorageConsumer,
 	consumerConfig util.StorageConsumerResources,
 	rbdStorageId string,
 	remoteRbdStorageId string,
-) ([]client.Object, error) {
+) ([]kubeObjectWithOpRecord, error) {
 
 	resources := getKubeResourcesForClass(
 		logger,
@@ -2088,21 +2108,21 @@ func (s *OCSProviderServer) appendVolumeReplicationClassKubeResources(
 			)
 		},
 	)
-	kubeResources = append(kubeResources, resources...)
+	records = append(records, resources...)
 
-	return kubeResources, nil
+	return records, nil
 }
 
 func (s *OCSProviderServer) appendVolumeGroupReplicationClassKubeResources(
 	ctx context.Context,
 	logger logr.Logger,
-	kubeResources []client.Object,
+	records []kubeObjectWithOpRecord,
 	consumer *ocsv1alpha1.StorageConsumer,
 	consumerConfig util.StorageConsumerResources,
 	storageCluster *ocsv1.StorageCluster,
 	rbdStorageId string,
 	remoteRbdStorageId string,
-) ([]client.Object, error) {
+) ([]kubeObjectWithOpRecord, error) {
 
 	resources := getKubeResourcesForClass(
 		logger,
@@ -2120,15 +2140,15 @@ func (s *OCSProviderServer) appendVolumeGroupReplicationClassKubeResources(
 			)
 		},
 	)
-	kubeResources = append(kubeResources, resources...)
+	records = append(records, resources...)
 
-	return kubeResources, nil
+	return records, nil
 }
 
 func (s *OCSProviderServer) appendClusterResourceQuotaKubeResources(
-	kubeResources []client.Object,
+	records []kubeObjectWithOpRecord,
 	consumer *ocsv1alpha1.StorageConsumer,
-) ([]client.Object, error) {
+) ([]kubeObjectWithOpRecord, error) {
 	if consumer.Spec.StorageQuotaInGiB > 0 {
 		clusterResourceQuota := &quotav1.ClusterResourceQuota{
 			ObjectMeta: metav1.ObjectMeta{
@@ -2154,21 +2174,24 @@ func (s *OCSProviderServer) appendClusterResourceQuotaKubeResources(
 			},
 		}
 
-		kubeResources = append(kubeResources, clusterResourceQuota)
+		records = append(records, kubeObjectWithOpRecord{
+			kubeObject: clusterResourceQuota,
+			clientOp:   pb.KubeClientOp_CREATE_OR_UPDATE,
+		})
 	}
-	return kubeResources, nil
+	return records, nil
 }
 
 func (s *OCSProviderServer) appendClientProfileMappingKubeResources(
 	ctx context.Context,
-	kubeResources []client.Object,
+	records []kubeObjectWithOpRecord,
 	consumer *ocsv1alpha1.StorageConsumer,
 	consumerConfig util.StorageConsumerResources,
 	mirroringTargetInfo *pb.ClientInfo,
-) ([]client.Object, error) {
+) ([]kubeObjectWithOpRecord, error) {
 	cbpList := &rookCephv1.CephBlockPoolList{}
 	if err := s.client.List(ctx, cbpList, client.InNamespace(s.namespace)); err != nil {
-		return kubeResources, fmt.Errorf("failed to list cephBlockPools in namespace. %v", err)
+		return records, fmt.Errorf("failed to list cephBlockPools in namespace. %v", err)
 	}
 	blockPoolMapping := []csiopv1.BlockPoolIdPair{}
 	for i := range cbpList.Items {
@@ -2185,33 +2208,38 @@ func (s *OCSProviderServer) appendClientProfileMappingKubeResources(
 
 	remoteClientProfileName := mirroringTargetInfo.ClientProfiles[clientInfoRbdClientProfileKey]
 	if len(blockPoolMapping) > 0 && remoteClientProfileName != "" {
-		kubeResources = append(
-			kubeResources,
-			&csiopv1.ClientProfileMapping{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      consumer.Status.Client.Name,
-					Namespace: consumer.Status.Client.OperatorNamespace,
-				},
-				Spec: csiopv1.ClientProfileMappingSpec{
-					Mappings: []csiopv1.MappingsSpec{
-						{
-							LocalClientProfile:  consumerConfig.GetRbdClientProfileName(),
-							RemoteClientProfile: remoteClientProfileName,
-							BlockPoolIdMapping:  blockPoolMapping,
-						},
+		clientProfileMapping := &csiopv1.ClientProfileMapping{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      consumer.Status.Client.Name,
+				Namespace: consumer.Status.Client.OperatorNamespace,
+			},
+			Spec: csiopv1.ClientProfileMappingSpec{
+				Mappings: []csiopv1.MappingsSpec{
+					{
+						LocalClientProfile:  consumerConfig.GetRbdClientProfileName(),
+						RemoteClientProfile: remoteClientProfileName,
+						BlockPoolIdMapping:  blockPoolMapping,
 					},
 				},
 			},
+		}
+
+		records = append(
+			records,
+			kubeObjectWithOpRecord{
+				kubeObject: clientProfileMapping,
+				clientOp:   pb.KubeClientOp_CREATE_OR_UPDATE,
+			},
 		)
 	}
-	return kubeResources, nil
+	return records, nil
 }
 
 func (s *OCSProviderServer) appendOBCResources(
 	ctx context.Context,
-	kubeResources []client.Object,
+	records []kubeObjectWithOpRecord,
 	consumer *ocsv1alpha1.StorageConsumer,
-) ([]client.Object, error) {
+) ([]kubeObjectWithOpRecord, error) {
 
 	obcList := &nbv1.ObjectBucketClaimList{}
 	if err := s.client.List(
@@ -2236,18 +2264,37 @@ func (s *OCSProviderServer) appendOBCResources(
 			return nil, fmt.Errorf("failed to get OBC related resources for consumer %v. %v", consumer.UID, err)
 		}
 
-		ob.Name = remoteOBCName
+		ob.Name = fmt.Sprintf("obc-%s-%s", remoteOBCNamespace, remoteOBCName)
 		configMap.Name = remoteOBCName
 		configMap.Namespace = remoteOBCNamespace
 		secret.Name = remoteOBCName
 		secret.Namespace = remoteOBCNamespace
 		obc.Name = remoteOBCName
 		obc.Namespace = remoteOBCNamespace
+		statusSubResource := pb.SubResource_SUB_RESOURCE_STATUS
 
-		kubeResources = append(kubeResources, obc, ob, configMap, secret)
+		records = append(records,
+			kubeObjectWithOpRecord{
+				kubeObject: ob,
+				clientOp:   pb.KubeClientOp_CREATE_OR_UPDATE,
+			},
+			kubeObjectWithOpRecord{
+				kubeObject: configMap,
+				clientOp:   pb.KubeClientOp_CREATE_OR_UPDATE,
+			},
+			kubeObjectWithOpRecord{
+				kubeObject: secret,
+				clientOp:   pb.KubeClientOp_CREATE_OR_UPDATE,
+			},
+			kubeObjectWithOpRecord{
+				kubeObject:  obc,
+				clientOp:    pb.KubeClientOp_UPDATE_SUB_RESOURCE,
+				subResource: &statusSubResource,
+			},
+		)
 	}
 
-	return kubeResources, nil
+	return records, nil
 }
 
 func (s *OCSProviderServer) getOBCRelatedResources(
@@ -2397,7 +2444,7 @@ func getKubeResourcesForClass[T CommonClassSpecAccessors](
 	classList []T,
 	classDisplayName string,
 	genClassKubeObjFn func(string) (client.Object, error),
-) []client.Object {
+) []kubeObjectWithOpRecord {
 	classNameMapping := map[string]string{}
 	for i := len(classList) - 1; i >= 0; i-- {
 		src := classList[i].GetName()
@@ -2411,7 +2458,7 @@ func getKubeResourcesForClass[T CommonClassSpecAccessors](
 		classNameMapping[cmp.Or(clsSpec.GetRename(), clsSpec.GetName())] = clsSpec.GetName()
 	}
 
-	kubeResources := []client.Object{}
+	records := []kubeObjectWithOpRecord{}
 	srcClassCache := map[string]client.Object{}
 	for destName, srcName := range classNameMapping {
 		var srcKubeObj client.Object
@@ -2435,10 +2482,13 @@ func getKubeResourcesForClass[T CommonClassSpecAccessors](
 		if _, exist := srcClassCache[srcName]; exist {
 			distKubeObj := srcKubeObj.DeepCopyObject().(client.Object)
 			distKubeObj.SetName(destName)
-			kubeResources = append(kubeResources, distKubeObj)
+			records = append(records, kubeObjectWithOpRecord{
+				kubeObject: distKubeObj,
+				clientOp:   pb.KubeClientOp_CREATE_OR_UPDATE,
+			})
 		}
 	}
-	return kubeResources
+	return records
 }
 
 func checkClientPreConditions(consumer *ocsv1alpha1.StorageConsumer, ocsOpVersion string, logger logr.Logger) bool {
