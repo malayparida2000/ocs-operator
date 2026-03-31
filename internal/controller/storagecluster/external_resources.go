@@ -563,7 +563,7 @@ func (r *StorageClusterReconciler) createExternalModeStorageClasses(sccs []Stora
 			radosNamespace := cephv1.CephBlockPoolRadosNamespace{}
 			key := types.NamespacedName{Name: radosNamespaceName, Namespace: namespace}
 			err := r.Get(context.TODO(), key, &radosNamespace)
-			if err != nil || radosNamespace.Status == nil || radosNamespace.Status.Phase != cephv1.ConditionType(util.PhaseReady) || radosNamespace.Status.Info["clusterID"] == "" {
+			if err != nil || radosNamespace.Status == nil || radosNamespace.Status.Phase != cephv1.ConditionType(ocsv1.PhaseReady) || radosNamespace.Status.Info["clusterID"] == "" {
 				r.Log.Info("Waiting for radosNamespace to be Ready. Skip reconciling StorageClass",
 					"radosNamespace", klog.KRef(key.Namespace, key.Name),
 					"StorageClass", klog.KRef("", sc.Name),
@@ -577,7 +577,7 @@ func (r *StorageClusterReconciler) createExternalModeStorageClasses(sccs []Stora
 			cephNFS := cephv1.CephNFS{}
 			key := types.NamespacedName{Name: sc.Parameters["nfsCluster"], Namespace: namespace}
 			err := r.Get(context.TODO(), key, &cephNFS)
-			if err != nil || cephNFS.Status == nil || cephNFS.Status.Phase != util.PhaseReady {
+			if err != nil || cephNFS.Status == nil || cephNFS.Status.Phase != ocsv1.PhaseReady {
 				r.Log.Info("Waiting for CephNFS to be Ready. Skip reconciling StorageClass",
 					"CephNFS", klog.KRef(key.Namespace, key.Name),
 					"StorageClass", klog.KRef("", sc.Name),
