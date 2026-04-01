@@ -534,7 +534,8 @@ func (r *StorageClusterReconciler) reconcilePhases(
 			&ocsExternalResources{},
 			&ocsStorageQuota{},
 			&ocsSnapshotClass{},
-			&ocsGroupSnapshotClass{},
+			// TODO:enable vgsc after GA of API
+			// &ocsGroupSnapshotClass{},
 			&ocsOdfGroupSnapshotClass{},
 			&ocsNetworkFenceClass{},
 			&ocsNoobaaSystem{},
