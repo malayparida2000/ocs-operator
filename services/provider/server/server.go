@@ -415,11 +415,12 @@ func (s *OCSProviderServer) GetDesiredClientState(ctx context.Context, req *pb.G
 			logger.Error(err, "failed to get volume snapshot class resource version")
 			return nil, status.Errorf(codes.Internal, "failed to produce client state")
 		}
-		vGSClassesResourceVersion, err := s.getVolumeGroupSnapshotClassesResourceVersion(ctx)
-		if err != nil {
-			logger.Error(err, "failed to get volume group snapshot class resource version")
-			return nil, status.Errorf(codes.Internal, "failed to produce client state")
-		}
+		// TODO: enable vgsc after GA of API
+		// vGSClassesResourceVersion, err := s.getVolumeGroupSnapshotClassesResourceVersion(ctx)
+		// if err != nil {
+		// 	logger.Error(err, "failed to get volume group snapshot class resource version")
+		// 	return nil, status.Errorf(codes.Internal, "failed to produce client state")
+		// }
 		odfVGSClassesResourceVersion, err := s.getOdfVolumeGroupSnapshotClassesResourceVersion(ctx)
 		if err != nil {
 			logger.Error(err, "failed to get odf volume group class resource version")
@@ -453,7 +454,8 @@ func (s *OCSProviderServer) GetDesiredClientState(ctx context.Context, req *pb.G
 			availableServices.Nfs,
 			storageClassesResourceVersion,
 			vSClassesResourceVersion,
-			vGSClassesResourceVersion,
+			// TODO: enable vgs after GA of API
+			// vGSClassesResourceVersion,
 			odfVGSClassesResourceVersion,
 			useHostNetworkForCtrlPlugin,
 			obcResourceVersions,
@@ -720,11 +722,12 @@ func (s *OCSProviderServer) ReportStatus(ctx context.Context, req *pb.ReportStat
 		logger.Error(err, "failed to get volume snapshot class resource version")
 		return nil, status.Errorf(codes.Internal, "failed to produce client state")
 	}
-	vGSClassesResourceVersion, err := s.getVolumeGroupSnapshotClassesResourceVersion(ctx)
-	if err != nil {
-		logger.Error(err, "failed to get volume group snapshot class resource version")
-		return nil, status.Errorf(codes.Internal, "failed to produce client state")
-	}
+	// TODO: enable vgsc after GA of API
+	// vGSClassesResourceVersion, err := s.getVolumeGroupSnapshotClassesResourceVersion(ctx)
+	// if err != nil {
+	// 	logger.Error(err, "failed to get volume group snapshot class resource version")
+	// 	return nil, status.Errorf(codes.Internal, "failed to produce client state")
+	// }
 	odfVGSClassesResourceVersion, err := s.getOdfVolumeGroupSnapshotClassesResourceVersion(ctx)
 	if err != nil {
 		logger.Error(err, "failed to get odf volume group class resource version")
@@ -751,7 +754,8 @@ func (s *OCSProviderServer) ReportStatus(ctx context.Context, req *pb.ReportStat
 		availableServices.Nfs,
 		storageClassesResourceVersion,
 		vSClassesResourceVersion,
-		vGSClassesResourceVersion,
+		// TODO: enable vgs
+		// vGSClassesResourceVersion,
 		odfVGSClassesResourceVersion,
 		util.ShouldUseHostNetworking(storageCluster),
 		obcResourceVersions,
@@ -1337,19 +1341,20 @@ func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Lo
 		return nil, err
 	}
 
-	records, err = s.appendVolumeGroupSnapshotClassKubeResources(
-		ctx,
-		logger,
-		records,
-		consumer,
-		consumerConfig,
-		storageCluster,
-		rbdStorageId,
-		cephFsStorageId,
-	)
-	if err != nil {
-		return nil, err
-	}
+	// TODO: enable vgsc after GA of API
+	// records, err = s.appendVolumeGroupSnapshotClassKubeResources(
+	// 	ctx,
+	// 	logger,
+	// 	records,
+	// 	consumer,
+	// 	consumerConfig,
+	// 	storageCluster,
+	// 	rbdStorageId,
+	// 	cephFsStorageId,
+	// )
+	// if err != nil {
+	// 	return nil, err
+	// }
 
 	records, err = s.appendOdfVolumeGroupSnapshotClassKubeResources(
 		ctx,
@@ -1922,6 +1927,7 @@ func (s *OCSProviderServer) appendVolumeSnapshotClassKubeResources(
 	return records, nil
 }
 
+//nolint:unused
 func (s *OCSProviderServer) appendVolumeGroupSnapshotClassKubeResources(
 	ctx context.Context,
 	logger logr.Logger,
@@ -2381,6 +2387,7 @@ func (s *OCSProviderServer) getVolumeSnapshotClassesResourceVersion(ctx context.
 	})
 }
 
+//nolint:unused
 func (s *OCSProviderServer) getVolumeGroupSnapshotClassesResourceVersion(ctx context.Context) ([]string, error) {
 	list := &groupsnapapi.VolumeGroupSnapshotClassList{}
 	return s.getResourceVersions(ctx, list, func() []string {
