@@ -18,6 +18,10 @@ func TestCephFSSubvolumeCountCollectorCollect(t *testing.T) {
 			prometheus.BuildFQName(namespace, "cephfs", "subvolume_count"),
 			"test", []string{"consumer_name"}, nil,
 		),
+		snapshotContentCount: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "cephfs", "snapshot_content_count"),
+			"test", []string{"consumer_name"}, nil,
+		),
 	}
 
 	t.Run("nil cache returns no metrics", func(t *testing.T) {
@@ -54,6 +58,10 @@ func TestCephFSSubvolumeCountCollectorCollect(t *testing.T) {
 				"consumer-a": 2,
 				"consumer-b": 3,
 			},
+			snapshotContentsByConsumer: map[string]int{
+				"consumer-a": 1,
+				"consumer-b": 4,
+			},
 		}
 		c.cache.Store(snap)
 
@@ -66,9 +74,9 @@ func TestCephFSSubvolumeCountCollectorCollect(t *testing.T) {
 			metrics = append(metrics, m)
 		}
 
-		// 2 subvolumeCount (per consumer) + 3 pvMetadata = 5
-		if len(metrics) != 5 {
-			t.Fatalf("expected 5 metrics, got %d", len(metrics))
+		// 2 subvolumeCount (per consumer) + 2 snapshotContentCount (per consumer) + 3 pvMetadata = 7
+		if len(metrics) != 7 {
+			t.Fatalf("expected 7 metrics, got %d", len(metrics))
 		}
 
 		countsByConsumer := make(map[string]float64)
@@ -94,8 +102,9 @@ func TestCephFSSubvolumeCountCollectorCollect(t *testing.T) {
 
 func TestCephFSSubvolumeCountCollectorDescribe(t *testing.T) {
 	c := &CephFSSubvolumeCountCollector{
-		pvMetadata:     prometheus.NewDesc("a", "a", nil, nil),
-		subvolumeCount: prometheus.NewDesc("b", "b", nil, nil),
+		pvMetadata:           prometheus.NewDesc("a", "a", nil, nil),
+		subvolumeCount:       prometheus.NewDesc("b", "b", nil, nil),
+		snapshotContentCount: prometheus.NewDesc("c", "c", nil, nil),
 	}
 
 	ch := make(chan *prometheus.Desc, 10)
@@ -106,8 +115,8 @@ func TestCephFSSubvolumeCountCollectorDescribe(t *testing.T) {
 	for d := range ch {
 		descs = append(descs, d)
 	}
-	if len(descs) != 2 {
-		t.Errorf("expected 2 descriptors, got %d", len(descs))
+	if len(descs) != 3 {
+		t.Errorf("expected 3 descriptors, got %d", len(descs))
 	}
 }
 
