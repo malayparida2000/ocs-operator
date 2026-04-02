@@ -23,18 +23,20 @@ type cephfsGroupData struct {
 }
 
 type cephfsCacheSnapshot struct {
-	groups              []cephfsGroupData
-	subvolumesByConsumer map[string]int // consumer_name -> subvolume count
+	groups                     []cephfsGroupData
+	subvolumesByConsumer       map[string]int // consumer_name -> subvolume count
+	snapshotContentsByConsumer map[string]int // consumer_name -> snapshot content count
 }
 
 type CephFSSubvolumeCountCollector struct {
-	conn           *cephconn.Conn
-	rookClient     rookclient.Interface
-	namespace      string
-	scanInterval   time.Duration
-	pvMetadata     *prometheus.Desc
-	subvolumeCount *prometheus.Desc
-	cache          atomic.Pointer[cephfsCacheSnapshot]
+	conn                 *cephconn.Conn
+	rookClient           rookclient.Interface
+	namespace            string
+	scanInterval         time.Duration
+	pvMetadata           *prometheus.Desc
+	subvolumeCount       *prometheus.Desc
+	snapshotContentCount *prometheus.Desc
+	cache                atomic.Pointer[cephfsCacheSnapshot]
 }
 
 func NewCephFSSubvolumeCountCollector(conn *cephconn.Conn, rookClient rookclient.Interface, ns string, scanInterval time.Duration) *CephFSSubvolumeCountCollector {
@@ -54,6 +56,11 @@ func NewCephFSSubvolumeCountCollector(conn *cephconn.Conn, rookClient rookclient
 			"Number of CephFS subvolumes per storage consumer",
 			[]string{"consumer_name"}, nil,
 		),
+		snapshotContentCount: prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "cephfs", "snapshot_content_count"),
+			"Number of CephFS snapshot contents per storage consumer",
+			[]string{"consumer_name"}, nil,
+		),
 	}
 }
 
@@ -64,6 +71,7 @@ func (c *CephFSSubvolumeCountCollector) Run(stopCh <-chan struct{}) {
 func (c *CephFSSubvolumeCountCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.pvMetadata
 	ch <- c.subvolumeCount
+	ch <- c.snapshotContentCount
 }
 
 func (c *CephFSSubvolumeCountCollector) Collect(ch chan<- prometheus.Metric) {
@@ -75,6 +83,11 @@ func (c *CephFSSubvolumeCountCollector) Collect(ch chan<- prometheus.Metric) {
 
 	for consumer, count := range snap.subvolumesByConsumer {
 		ch <- prometheus.MustNewConstMetric(c.subvolumeCount,
+			prometheus.GaugeValue, float64(count), consumer)
+	}
+
+	for consumer, count := range snap.snapshotContentsByConsumer {
+		ch <- prometheus.MustNewConstMetric(c.snapshotContentCount,
 			prometheus.GaugeValue, float64(count), consumer)
 	}
 
@@ -112,6 +125,7 @@ func (c *CephFSSubvolumeCountCollector) runScan() bool {
 	var groups []cephfsGroupData
 	anyVolumeSucceeded := false
 	subvolumesByConsumer := make(map[string]int)
+	snapshotContentsByConsumer := make(map[string]int)
 	pvLinkedSubvolumes := 0
 
 	for _, volume := range volumes {
@@ -133,6 +147,13 @@ func (c *CephFSSubvolumeCountCollector) runScan() bool {
 
 			subvolumes := make(map[string]string, len(subvolNames))
 			for _, sv := range subvolNames {
+				snapshots, err := fsa.ListSubVolumeSnapshots(volume, group, sv)
+				if err != nil {
+					klog.V(4).Infof("cephfs scan: failed to list snapshots for %s/%s/%s: %v", volume, group, sv, err)
+				} else {
+					snapshotContentsByConsumer[consumerName] += len(snapshots)
+				}
+
 				pvName, err := fsa.GetMetadata(volume, group, sv, pvMetadataKey)
 				if err != nil {
 					klog.V(4).Infof("cephfs scan: no PV metadata for %s/%s/%s: %v", volume, group, sv, err)
@@ -165,8 +186,9 @@ func (c *CephFSSubvolumeCountCollector) runScan() bool {
 	}
 
 	c.cache.Store(&cephfsCacheSnapshot{
-		groups:              groups,
-		subvolumesByConsumer: subvolumesByConsumer,
+		groups:                     groups,
+		subvolumesByConsumer:       subvolumesByConsumer,
+		snapshotContentsByConsumer: snapshotContentsByConsumer,
 	})
 
 	klog.Infof("cephfs scan: completed in %v, groups=%d, subvolumes=%d (with PV: %d)",
