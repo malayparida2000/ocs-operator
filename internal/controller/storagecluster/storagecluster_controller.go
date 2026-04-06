@@ -119,7 +119,7 @@ func (r *StorageClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		return err
 	}
 
-	r.recorder = util.NewEventReporter(mgr.GetEventRecorderFor("controller_storagecluster"))
+	r.recorder = util.NewEventReporter(mgr.GetEventRecorderFor("controller_storagecluster")) //nolint:staticcheck // TODO: migrate to new events API
 
 	// Compose a predicate that is an OR of the specified predicates
 	scPredicate := util.ComposePredicates(

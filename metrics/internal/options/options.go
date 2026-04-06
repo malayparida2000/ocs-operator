@@ -13,8 +13,10 @@ import (
 // default options
 const (
 	host                      = "0.0.0.0"
-	customResourceMetricsPort = 8080
-	exporterMetricsPort       = 8081
+	customResourceMetricsPort = 8443
+	exporterMetricsPort       = 9443
+	defaultTLSCertFile        = "/var/run/secrets/serving-cert/tls.crt"
+	defaultTLSKeyFile         = "/var/run/secrets/serving-cert/tls.key"
 )
 
 // Options are the configurable parameters for ocs-metrics-exporter.
@@ -33,6 +35,11 @@ type Options struct {
 	DisableHealthScore bool
 	NoCeph             bool
 	IsDevelopment      bool
+
+	// Secure serving options
+	SecureServing bool
+	TLSCertFile   string
+	TLSKeyFile    string
 
 	flags      *pflag.FlagSet
 	StopCh     chan struct{}
@@ -67,6 +74,11 @@ func (o *Options) AddFlags() {
 	o.flags.BoolVar(&o.NoCeph, "no-ceph", false, "Skip Ceph-dependent collectors (for external mode or NooBaa standalone).")
 	o.flags.DurationVar(&o.ScanInterval, "scan-interval", 5*time.Minute, "Interval between background Ceph scans.")
 	o.flags.BoolVar(&o.IsDevelopment, "development", false, "If we are running in development mode")
+
+	// Secure serving options
+	o.flags.BoolVar(&o.SecureServing, "secure-serving", true, "Enable HTTPS with authentication and authorization.")
+	o.flags.StringVar(&o.TLSCertFile, "tls-cert-file", defaultTLSCertFile, "Path to TLS certificate file.")
+	o.flags.StringVar(&o.TLSKeyFile, "tls-key-file", defaultTLSKeyFile, "Path to TLS private key file.")
 }
 
 // Parse parses the flags
