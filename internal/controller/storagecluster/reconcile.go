@@ -110,7 +110,7 @@ var storageClusterFinalizer = "storagecluster.ocs.openshift.io"
 // +kubebuilder:rbac:groups=config.openshift.io,resources=infrastructures;networks,verbs=get;list;watch
 // +kubebuilder:rbac:groups=config.openshift.io,resources=clusterversions;networks,verbs=get;list;watch
 // +kubebuilder:rbac:groups=apiextensions.k8s.io,resources=customresourcedefinitions,verbs=get;list;watch;create;update
-// +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=create;delete;list;watch;update
+// +kubebuilder:rbac:groups=route.openshift.io,resources=routes,verbs=get;create;delete;list;watch;update
 // +kubebuilder:rbac:groups=coordination.k8s.io,resources=leases,verbs=get;list;create;update
 // +kubebuilder:rbac:groups=operators.coreos.com,resources=operatorconditions,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=quota.openshift.io,resources=clusterresourcequotas,verbs=get;list;watch;create;update;delete
@@ -518,6 +518,7 @@ func (r *StorageClusterReconciler) reconcilePhases(
 				&ocsJobTemplates{},
 				&ocsCephRbdMirrors{},
 				&odfInfoConfig{},
+				&ocsS3EndpointsConfig{},
 			}
 		} else {
 			// noobaa-only ensure functions

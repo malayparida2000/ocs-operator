@@ -92,6 +92,8 @@ const (
 	storageConsumerNameLabelKey    = "storage-consumer-name"
 	storageConsumerUUIDLabelKey    = "storage-consumer-uuid"
 	prefixOfHashedName             = "remote-obc"
+
+	s3EndpointsConfigMapLabelKey = "ocs.openshift.io/hub-s3-endpoints"
 )
 
 var (
@@ -459,6 +461,12 @@ func (s *OCSProviderServer) GetDesiredClientState(ctx context.Context, req *pb.G
 			return nil, status.Errorf(codes.Internal, "Failed to produce client state")
 		}
 
+		s3EndpointsListResourceVersion, err := s.getS3EndpointsListResourceVersion(ctx)
+		if err != nil {
+			logger.Error(err, "failed to get endpoints list resource version")
+			return nil, status.Errorf(codes.Internal, "failed to produce client state")
+		}
+
 		desiredClientConfigHash := getDesiredClientConfigHash(
 			channelName,
 			zerodNonHashableFields(consumer),
@@ -478,6 +486,7 @@ func (s *OCSProviderServer) GetDesiredClientState(ctx context.Context, req *pb.G
 			odfVGSClassesResourceVersion,
 			useHostNetworkForCtrlPlugin,
 			obcResourceVersions,
+			s3EndpointsListResourceVersion,
 		)
 		response.DesiredStateHash = desiredClientConfigHash
 
@@ -759,6 +768,12 @@ func (s *OCSProviderServer) ReportStatus(ctx context.Context, req *pb.ReportStat
 		return nil, status.Errorf(codes.Internal, "Failed to produce client state")
 	}
 
+	s3EndpointsListResourceVersion, err := s.getS3EndpointsListResourceVersion(ctx)
+	if err != nil {
+		logger.Error(err, "failed to get endpoints list resource version")
+		return nil, status.Errorf(codes.Internal, "failed to produce client state")
+	}
+
 	desiredClientConfigHash := getDesiredClientConfigHash(
 		channelName,
 		zerodNonHashableFields(storageConsumer),
@@ -778,6 +793,7 @@ func (s *OCSProviderServer) ReportStatus(ctx context.Context, req *pb.ReportStat
 		odfVGSClassesResourceVersion,
 		util.ShouldUseHostNetworking(storageCluster),
 		obcResourceVersions,
+		s3EndpointsListResourceVersion,
 	)
 
 	logger.Info("Successfully processed status report")
@@ -1453,7 +1469,15 @@ func (s *OCSProviderServer) getKubeResources(ctx context.Context, logger logr.Lo
 		records,
 		consumer,
 	)
+	if err != nil {
+		return nil, err
+	}
 
+	records, err = s.appendS3EndpointsListKubeResources(
+		ctx,
+		records,
+		consumer,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -2431,6 +2455,53 @@ func (s *OCSProviderServer) getOdfVolumeGroupSnapshotClassesResourceVersion(ctx 
 		}
 		return versions
 	})
+}
+
+func (s *OCSProviderServer) getS3EndpointsListResourceVersion(ctx context.Context) (string, error) {
+	ocsConfigMap := &corev1.ConfigMap{}
+	ocsConfigMap.Name = util.OcsHubS3EndpointsConfigMapName
+	ocsConfigMap.Namespace = s.namespace
+	configMapKey := client.ObjectKeyFromObject(ocsConfigMap)
+	if err := s.client.Get(ctx, configMapKey, ocsConfigMap); err != nil {
+		if kerrors.IsNotFound(err) {
+			return "", nil
+		}
+		return "", fmt.Errorf("failed to get ConfigMap %s: %w", configMapKey, err)
+	}
+	return ocsConfigMap.ResourceVersion, nil
+}
+
+func (s *OCSProviderServer) appendS3EndpointsListKubeResources(
+	ctx context.Context,
+	records []kubeObjectWithOpRecord,
+	consumer *ocsv1alpha1.StorageConsumer,
+) ([]kubeObjectWithOpRecord, error) {
+	ocsConfigMap := &corev1.ConfigMap{}
+	ocsConfigMap.Name = util.OcsHubS3EndpointsConfigMapName
+	ocsConfigMap.Namespace = s.namespace
+	configMapKey := client.ObjectKeyFromObject(ocsConfigMap)
+	if err := s.client.Get(ctx, configMapKey, ocsConfigMap); err != nil {
+		if kerrors.IsNotFound(err) {
+			return records, nil
+		}
+		return nil, fmt.Errorf("failed to get ConfigMap %s: %w", configMapKey, err)
+	}
+
+	clientConfigMap := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf(util.ClientS3EndpointsConfigMapNameFormat, consumer.Status.Client.ID),
+			Namespace: consumer.Status.Client.OperatorNamespace,
+			Labels: map[string]string{
+				s3EndpointsConfigMapLabelKey: strconv.FormatBool(true),
+			},
+		},
+		Data: ocsConfigMap.Data,
+	}
+
+	return append(records, kubeObjectWithOpRecord{
+		kubeObject: clientConfigMap,
+		clientOp:   pb.KubeClientOp_CREATE_OR_UPDATE,
+	}), nil
 }
 
 func sanitizeKubeResource(obj client.Object, sanitizeFlags sanitizeFlags) {
