@@ -615,6 +615,14 @@ spec:
           - watch
           - create
           - delete
+        - apiGroups:
+          - monitoring.coreos.com
+          resourceNames:
+          - k8s
+          resources:
+          - prometheuses/api
+          verbs:
+          - get
         serviceAccountName: ocs-provider-server
       deployments:
       - name: ocs-operator
