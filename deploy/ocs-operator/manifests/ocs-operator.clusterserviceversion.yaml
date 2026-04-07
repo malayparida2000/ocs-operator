@@ -180,6 +180,12 @@ spec:
     spec:
       clusterPermissions:
       - rules:
+        - nonResourceURLs:
+          - /healthz
+          - /metrics
+          - /readyz
+          verbs:
+          - get
         - apiGroups:
           - ""
           resources:
