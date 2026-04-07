@@ -122,7 +122,7 @@ require (
 	github.com/mwitkow/go-conntrack v0.0.0-20190716064945-2f068394615f // indirect
 	github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f // indirect
 	github.com/noobaa/noobaa-operator/v5 v5.0.0-20251118072940-a392e524a776 // indirect
-	github.com/openshift/api v0.0.0-20251120040117-916c7003ed78 // indirect
+	github.com/openshift/api v0.0.0-20260326111139-30c2ef7a272e // indirect
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
