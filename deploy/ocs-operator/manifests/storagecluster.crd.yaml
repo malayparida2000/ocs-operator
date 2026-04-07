@@ -2947,6 +2947,9 @@ spec:
                         type: boolean
                       disableRoute:
                         type: boolean
+                      enableSTS:
+                        description: Enables STS authentication for RGW
+                        type: boolean
                       gatewayInstances:
                         type: integer
                       gatewayPort:
