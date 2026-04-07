@@ -6,7 +6,7 @@ toolchain go1.25.8
 
 require (
 	github.com/noobaa/noobaa-operator/v5 v5.0.0-20251118072940-a392e524a776
-	github.com/openshift/api v0.0.0-20251120040117-916c7003ed78
+	github.com/openshift/api v0.0.0-20260326111139-30c2ef7a272e
 	github.com/openshift/custom-resource-status v1.1.3-0.20220503160415-f2fdb4999d87
 	github.com/rook/rook/pkg/apis v0.0.0-20260330211118-fb400b9d29fd
 	k8s.io/api v0.35.3
