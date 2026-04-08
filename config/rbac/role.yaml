@@ -4,6 +4,12 @@ kind: ClusterRole
 metadata:
   name: manager-role
 rules:
+- nonResourceURLs:
+  - /healthz
+  - /metrics
+  - /readyz
+  verbs:
+  - get
 - apiGroups:
   - ""
   resources:
