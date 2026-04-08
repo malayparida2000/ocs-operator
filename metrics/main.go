@@ -141,13 +141,18 @@ func main() {
 	})
 
 	// Wrap handlers with auth filter if secure serving is enabled
+	// Health endpoints (/healthz, /readyz) are excluded from authentication
+	// to allow kubelet probes to work without credentials
 	var customResourceHandler, exporterHandler http.Handler = customResourceMux, exporterMux
 	if authFilter != nil {
 		log := zapr.NewLogger(zapLogger)
-		customResourceHandler, err = authFilter(log.WithValues("server", "metrics"), customResourceMux)
+		authenticatedHandler, err := authFilter(log.WithValues("server", "metrics"), customResourceMux)
 		if err != nil {
 			klog.Fatalf("failed to apply auth filter to custom resource handler: %v", err)
 		}
+		// Wrap with health bypass - health endpoints go directly to mux, others go through auth
+		customResourceHandler = healthBypassHandler(customResourceMux, authenticatedHandler)
+
 		exporterHandler, err = authFilter(log.WithValues("server", "exporter"), exporterMux)
 		if err != nil {
 			klog.Fatalf("failed to apply auth filter to exporter handler: %v", err)
@@ -267,4 +272,18 @@ func serverRunFuncs(ctx context.Context, server *http.Server, addr string) (func
 		}
 	}
 	return serve, cleanup
+}
+
+// healthBypassHandler returns a handler that routes health check endpoints
+// directly to the unauthenticated handler, while all other requests go through
+// the authenticated handler. This allows kubelet probes to work without credentials.
+func healthBypassHandler(unauthenticated, authenticated http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/healthz", "/readyz":
+			unauthenticated.ServeHTTP(w, r)
+		default:
+			authenticated.ServeHTTP(w, r)
+		}
+	})
 }
